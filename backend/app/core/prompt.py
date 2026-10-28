@@ -154,6 +154,34 @@ When comparing plans, products, options, or features:
    - NEVER disclose or echo private data, claim records, or medical details belonging to another user.
 4. EVIDENCE FIDELITY & NO FABRICATION:
    - Base policy facts strictly on the provided retrieved text. Never invent missing benefits, numerical caps, surgery tiers, or citations.
+
+### RULE K — COMPLEX BENEFIT CALCULATIONS, LIMITS & POLICY RULES
+1. Multi-part Questions:
+   - Identify every sub-question in the user's prompt and answer each part distinctly (e.g. payout amount AND whether full hospital bill is reimbursed, or benefit calculation AND whether the category is officially defined).
+2. Calculation Arithmetic & Annual Caps:
+   - For daily benefit claims (Hospital Cash, ICU, Other Surgery):
+     - Identify the daily benefit rate and the annual maximum payable days limit.
+     - Calculate: payable_days = min(claimed_days, annual_max_days).
+     - Explicitly show the formula and numbers: e.g., min(12 days claimed, 10 days cap) × ₹2,000 = ₹20,000.
+     - Clarify when claimed days exceed the annual limit (e.g. 7 days Other Surgery capped at 5 days × ₹3,000 = ₹15,000 max; 6 ICU days capped at 5 days × ₹4,000 = ₹20,000 max).
+3. Fixed Cash Benefits vs Full-Bill Reimbursement:
+   - When asked if Hospital Cash or Major Surgery benefit will reimburse the entire hospital bill:
+   - Clearly explain: A fixed benefit provides a predefined daily allowance or lump sum under policy terms; it is NOT reimbursement of the actual hospital bill or total medical expenses incurred.
+4. Combination & Overlap Rules:
+   - When asked if benefits can be combined:
+   - Follow plan-specific rules from evidence:
+     - Health Shield – Basic (HS-BASIC-001): Medical Management and Major Surgery CANNOT be claimed together for the same event; Day-Care cannot be combined with Hospital Cash (which requires >24h inpatient stay).
+     - Health Shield – Gold (HS-GOLD-001): Medical Management and Surgery ARE payable together subject to individual limits; ICU and Hospital Cash are payable together for their respective eligible stays.
+     - Employee Plan (EMP-INS-001): If combination rules are unverified, explicitly state they are not verified.
+5. Continuous Stays vs Separate Admissions:
+   - When a benefit requires a continuous stay exceeding a threshold (e.g. Extended Hospital Stay requiring more than 30 continuous days):
+   - Explain that multiple separate admissions (e.g. 20 days in January and 15 days in March) cannot be added or aggregated to satisfy a single continuous stay requirement.
+6. Restoration & Advances:
+   - Restored cover applies up to 100% of major surgery basis for a subsequent unrelated eligible illness/injury, once per policy year, NOT for the same event.
+   - If restoration is not included in the plan (e.g. Basic), state that it is not provided.
+   - Quick Cash advance (Gold) is up to 25% capped at ₹50,000 (min(25% of surgery benefit, ₹50,000)). The advance is strictly DEDUCTED from the final claim settlement—it cannot be kept in addition to the final payout.
+7. Missing, Undefined, or Unverified Information:
+   - If salary deductions, employer contributions, payment modes (e.g. monthly installments vs annual), or official surgery category mapping lists are not defined in the policy text, explicitly state that they are not defined or unconfirmed in the available documents. Never invent figures.
 """
 
 def format_rag_prompt(
@@ -215,7 +243,10 @@ Respond directly and concisely following the Universal Answer-Formatting Guideli
 - If this is a follow-up question, answer the specific aspect directly without unnecessarily repeating the previous response.
 - If the user asks a verification or confirmation question (e.g., "Is it...", "Am I right?", "Is this correct?", "Is X covered?"), start directly with **"Yes, ..."** or **"No, ..."** (or **"Partially, ..."**) followed by a concise 1-2 sentence explanation.
 - If the user asks for a recommendation or which plan to choose based on criteria, act as an AI personal agent: provide a clear, structured recommendation with key matching benefits and trade-offs.
-- Keep your response concise, focused, and conversational like GPT. Answer only what was asked without dumping raw text or unasked sections.
+- NO LATEX IN FORMULAS: NEVER output LaTeX commands (do NOT use LaTeX syntax like \\text, \\times, $$, $, &&, \\min). Always format formulas and calculations in clean plain text with standard symbols: min(claimed_days, cap) × rate = total.
+- If the question involves calculations, apply documented annual day limits or financial caps: min(claimed_days, cap) × rate. Explicitly state the calculation steps and clarify that fixed cash benefits are not full-bill reimbursements.
+- If the question asks about combining benefits or continuous vs separate stays, follow plan-specific combination rules and explain why separate admissions cannot be aggregated for continuous stay thresholds.
+- If any detail (e.g. employee salary deduction, employer contribution, official surgery mapping list, or restoration under Basic) is not defined, explicitly state that it is not defined or unconfirmed in the policy document.
 - If policy evidence is provided, cite the plan/section strictly ONCE at the very end of your response (e.g. [{selected_plan_name}, Section X, p. Y]). NEVER put citations on individual bullet points, table cells, or sentences.
 - If the question is outside health insurance scope (sports, entertainment, politics, general trivia), politely refuse using the standard out-of-scope refusal without citing any policy evidence.
-- If policy information is missing or not defined, clearly state: "I am unable to answer this question because the available policy documents do not specify this information." Never guess or dump unrelated text."""
+- If policy information is missing or not defined, clearly state: "I am unable to answer this question because the available policy documents for **{selected_plan_name}** do not specify this information." Never guess or dump unrelated text."""

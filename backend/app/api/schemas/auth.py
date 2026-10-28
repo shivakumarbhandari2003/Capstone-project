@@ -77,4 +77,5 @@ class UserProfileResponse(BaseModel):
     is_confirmed: Optional[bool] = False
     confirmation_status: Optional[str] = None
     confirmed_at: Optional[str] = None
+    confirmed_plan_id: Optional[str] = None
     authorized_plans: Optional[list[str]] = None

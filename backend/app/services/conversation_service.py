@@ -21,6 +21,7 @@ class ChatMessage(BaseModel):
     is_comparison: bool = False
     is_clarification: bool = False
     contains_unverified_notice: bool = False
+    suggested_follow_ups: list[str] = Field(default_factory=list)
 
 class ConversationSession(BaseModel):
     conversation_id: str
@@ -262,7 +263,8 @@ class ConversationManager:
         effective_scope: list[str],
         is_comparison: bool = False,
         is_clarification: bool = False,
-        contains_unverified: bool = False
+        contains_unverified: bool = False,
+        suggested_follow_ups: Optional[list[str]] = None
     ) -> ChatMessage:
         session = self.get_conversation(conversation_id, user_id)
         if not session:
@@ -288,7 +290,8 @@ class ConversationManager:
             effective_scope=effective_scope,
             is_comparison=is_comparison,
             is_clarification=is_clarification,
-            contains_unverified_notice=contains_unverified
+            contains_unverified_notice=contains_unverified,
+            suggested_follow_ups=suggested_follow_ups or []
         )
         session.messages.append(a_msg)
         session.updated_at = now

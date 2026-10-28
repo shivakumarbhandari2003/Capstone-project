@@ -115,21 +115,36 @@ def get_me(user: UserIdentity = Depends(get_current_user)):
         assessment_completed_at = asmt.get("completed_at") or asmt.get("created_at")
 
     # Query persistent plan selection & confirmation
+    confirmed_sel = sqlite_db.get_confirmed_plan_selection_for_user(user.user_id) if hasattr(sqlite_db, 'get_confirmed_plan_selection_for_user') else None
     active_sel = sqlite_db.get_active_plan_selection_for_user(user.user_id)
     selected_plan_id = None
     selected_plan_name = None
     plan_selection_status = None
     is_confirmed = False
-    confirmation_status = None
+    confirmation_status = "NOT_CONFIRMED"
     confirmed_at = None
+    confirmed_plan_id = None
+
+    if confirmed_sel:
+        confirmed_plan_id = confirmed_sel.get("selected_plan_id")
+        confirmed_at = confirmed_sel.get("confirmed_at")
+
     if active_sel:
         selected_plan_id = active_sel.get("selected_plan_id")
         plan_obj = PLAN_REGISTRY.get(selected_plan_id)
         selected_plan_name = plan_obj.plan_name if plan_obj else selected_plan_id
         plan_selection_status = active_sel.get("status")
-        is_confirmed = (active_sel.get("status") == "CONFIRMED") or bool(active_sel.get("confirmed_at"))
-        confirmation_status = "CONFIRMED" if is_confirmed else "PENDING_CONFIRMATION"
-        confirmed_at = active_sel.get("confirmed_at")
+        if active_sel.get("status") == "CONFIRMED":
+            is_confirmed = True
+            confirmation_status = "CONFIRMED"
+            confirmed_at = active_sel.get("confirmed_at")
+            confirmed_plan_id = active_sel.get("selected_plan_id")
+        elif confirmed_sel and confirmed_plan_id == selected_plan_id:
+            is_confirmed = True
+            confirmation_status = "CONFIRMED"
+        else:
+            is_confirmed = False
+            confirmation_status = "PENDING_CONFIRMATION"
 
     authorized_plans = sorted(list(AuthorizationService.get_authorized_plans(role)))
 
@@ -151,5 +166,6 @@ def get_me(user: UserIdentity = Depends(get_current_user)):
         is_confirmed=is_confirmed,
         confirmation_status=confirmation_status,
         confirmed_at=confirmed_at,
+        confirmed_plan_id=confirmed_plan_id,
         authorized_plans=authorized_plans
     )

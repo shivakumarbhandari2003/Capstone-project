@@ -1,8 +1,148 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import MarkdownContent from './MarkdownContent';
 import { ChatActionsSidebar } from './ChatActionsSidebar';
 import { ClaimPredictorDrawer } from './ClaimPredictorDrawer';
 import { LiquidThinkingOrb } from './ui/orb_animation';
+
+
+function getInitialSuggestedQuestions(plan) {
+  const planId = (plan?.plan_id || '').toUpperCase();
+
+  if (planId.includes('GOLD')) {
+    return [
+      "What are Hospital Cash & ICU limits?",
+      "How do surgical cash tiers payout?",
+      "What waiting periods apply to diseases?"
+    ];
+  } else if (planId.includes('BASIC')) {
+    return [
+      "What are Basic ICU & Cash limits?",
+      "What waiting periods apply to pre-existing?",
+      "What are Major Surgery category payouts?"
+    ];
+  } else if (planId.includes('EMP')) {
+    return [
+      "What are daily cash & ICU allowances?",
+      "What are Major Surgery category limits?",
+      "Is pre-existing waiting period waived?"
+    ];
+  }
+
+  return [
+    "What are Hospital Cash & ICU limits?",
+    "Which surgical procedures are covered?",
+    "What are the policy waiting periods?"
+  ];
+}
+
+function getContextualFollowUps(query, plan) {
+  const q = (query || '').toLowerCase();
+  const planId = (plan?.plan_id || '').toUpperCase();
+  const planName = plan?.display_title || plan?.plan_name || 'this policy';
+
+  // Sourced strictly from the Confirm & Review schedule
+  if (planId.includes('GOLD')) {
+    if (q.includes('surg') || q.includes('doctor') || q.includes('fee') || q.includes('operation') || q.includes('procedure') || q.includes('tier') || q.includes('cataract') || q.includes('surgeon')) {
+      return [
+        "What are the Category 1 to 4 Major Surgery payout amounts under Health Shield – Gold?",
+        "Can I claim a Quick Cash advance of up to Rs. 50,000 for surgery?"
+      ];
+    } else if (q.includes('icu') || q.includes('room') || q.includes('daily') || q.includes('stay') || q.includes('hospital cash') || q.includes('admission')) {
+      return [
+        "What is the daily ICU benefit amount and maximum days under Health Shield – Gold?",
+        "How much is the daily Hospital Cash allowance for stays exceeding 24 hours?"
+      ];
+    } else if (q.includes('wait') || q.includes('pre-existing') || q.includes('ped') || q.includes('exclusion') || q.includes('condition') || q.includes('disease')) {
+      return [
+        "What is the waiting period for pre-existing diseases under Health Shield – Gold?",
+        "Which specified diseases have a 24-month waiting period under Health Shield – Gold?"
+      ];
+    } else if (q.includes('claim') || q.includes('file') || q.includes('document') || q.includes('submit') || q.includes('deadline') || q.includes('emergency')) {
+      return [
+        "What is the deadline for submitting post-discharge claim documents?",
+        "Within what timeframe must emergency hospitalizations be notified?"
+      ];
+    } else if (q.includes('advance') || q.includes('quick cash') || q.includes('restore') || q.includes('check') || q.includes('ambulance') || q.includes('extended')) {
+      return [
+        "What is the day-care procedure benefit and claim limit per year?",
+        "How does the restored cover benefit work under Health Shield – Gold?"
+      ];
+    }
+    return [
+      "What is the Major Surgery benefit basis under Health Shield – Gold?",
+      "What are the ICU and Hospital Cash daily benefit limits under Health Shield – Gold?"
+    ];
+  } else if (planId.includes('BASIC')) {
+    if (q.includes('surg') || q.includes('doctor') || q.includes('fee') || q.includes('operation') || q.includes('procedure') || q.includes('tier') || q.includes('surgeon')) {
+      return [
+        "What are the Major Surgery category payouts under Health Shield – Basic?",
+        "What is the day-care procedure benefit under Health Shield – Basic?"
+      ];
+    } else if (q.includes('icu') || q.includes('room') || q.includes('daily') || q.includes('stay') || q.includes('hospital cash') || q.includes('admission')) {
+      return [
+        "What is the daily ICU benefit and maximum days under Health Shield – Basic?",
+        "What is the Hospital Cash daily benefit under Health Shield – Basic?"
+      ];
+    } else if (q.includes('wait') || q.includes('pre-existing') || q.includes('ped') || q.includes('exclusion') || q.includes('condition')) {
+      return [
+        "What is the pre-existing disease waiting period under Health Shield – Basic?",
+        "Are accidental injuries covered from day 1 under Health Shield – Basic?"
+      ];
+    } else if (q.includes('claim') || q.includes('file') || q.includes('document') || q.includes('submit')) {
+      return [
+        "What is the post-discharge claim document submission window under Basic?",
+        "What is the premium payment grace period under Health Shield – Basic?"
+      ];
+    }
+    return [
+      "What are the Hospital Cash and ICU daily benefits under Health Shield – Basic?",
+      "What are the Category 1 to 4 surgical payout limits under Health Shield – Basic?"
+    ];
+  } else if (planId.includes('EMP')) {
+    if (q.includes('surg') || q.includes('doctor') || q.includes('fee') || q.includes('procedure') || q.includes('tier') || q.includes('surgeon')) {
+      return [
+        "What are the Category 1 to 4 Major Surgery limits for employees?",
+        "How many day-care surgical procedures are covered per year?"
+      ];
+    } else if (q.includes('icu') || q.includes('daily') || q.includes('stay') || q.includes('hospital cash')) {
+      return [
+        "What is the daily ICU benefit allowance for executive employees?",
+        "What are the Hospital Cash limits in the first year versus later years?"
+      ];
+    } else if (q.includes('wait') || q.includes('pre-existing') || q.includes('ped') || q.includes('exclusion')) {
+      return [
+        "Is the pre-existing disease waiting period waived for active employees?",
+        "What is the initial illness waiting period under the employee plan?"
+      ];
+    }
+    return [
+      "What are the daily Hospital Cash and ICU allowances for employees?",
+      "What is the Major Surgery benefit basis for executive employees?"
+    ];
+  }
+
+  // Default / Premium plan fallbacks
+  if (q.includes('surg') || q.includes('doctor') || q.includes('fee') || q.includes('surgeon')) {
+    return [
+      `What are the Major Surgery benefit payouts under ${planName}?`,
+      `What is the day-care surgical benefit limit under ${planName}?`
+    ];
+  } else if (q.includes('icu') || q.includes('room') || q.includes('daily')) {
+    return [
+      `What is the daily ICU allowance and annual limit under ${planName}?`,
+      `What is the Hospital Cash daily payout under ${planName}?`
+    ];
+  } else if (q.includes('wait') || q.includes('pre-existing') || q.includes('ped')) {
+    return [
+      `What are the waiting periods for specified illnesses under ${planName}?`,
+      `What is the lookback period for pre-existing diseases under ${planName}?`
+    ];
+  }
+  return [
+    `What is the Major Surgery benefit basis under ${planName}?`,
+    `What is the daily ICU benefit amount under ${planName}?`
+  ];
+}
 
 export function PlanChatScreen({
   selectedPlan,
@@ -48,6 +188,32 @@ export function PlanChatScreen({
   const [copiedId, setCopiedId] = useState(null);
   const [speakingId, setSpeakingId] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
+  const [followUpQuestions, setFollowUpQuestions] = useState([]);
+
+  // Check if conversation is in initial empty state or fresh new chat
+  const isFirstTimeOrNewChat = useMemo(() => {
+    if (!messages || !Array.isArray(messages) || messages.length <= 1) return true;
+    return messages.every((m) => m?.role !== 'user');
+  }, [messages]);
+
+  // Compute active suggestions: strictly 3 initial questions on new chat; 2-3 follow-ups after LLM response
+  const activeSuggestions = useMemo(() => {
+    try {
+      if (isFirstTimeOrNewChat) {
+        return (getInitialSuggestedQuestions(selectedPlan) || []).slice(0, 3);
+      }
+      if (followUpQuestions && Array.isArray(followUpQuestions) && followUpQuestions.length > 0) {
+        return followUpQuestions.slice(0, 3);
+      }
+      if (messages && Array.isArray(messages)) {
+        const lastUserMsg = [...messages].reverse().find((m) => m?.role === 'user');
+        return (getContextualFollowUps(lastUserMsg?.content, selectedPlan) || []).slice(0, 3);
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [isFirstTimeOrNewChat, selectedPlan, followUpQuestions, messages]);
   const [editContent, setEditContent] = useState('');
   const [isListening, setIsListening] = useState(false);
 
@@ -342,6 +508,7 @@ export function PlanChatScreen({
   useEffect(() => {
     if (newChatTrigger && newChatTrigger > 0) {
       setMessages([createWelcomeMessage(selectedPlan)]);
+      setFollowUpQuestions([]);
       startNewConversation();
     }
   }, [newChatTrigger]);
@@ -358,6 +525,7 @@ export function PlanChatScreen({
   const startNewConversation = async () => {
     if (!selectedPlan) return;
     setError(null);
+    setFollowUpQuestions([]);
     setExpandedSources({});
     if (onCloseActionsSidebar) onCloseActionsSidebar();
     setLocalIsActionsSidebarOpen(false);
@@ -478,8 +646,18 @@ export function PlanChatScreen({
 
       if (data.messages && data.messages.length > 0) {
         setMessages(data.messages);
+        const lastAssistant = [...data.messages].reverse().find((m) => m.role === 'assistant');
+        const lastUser = [...data.messages].reverse().find((m) => m.role === 'user');
+        if (lastAssistant?.suggested_follow_ups && lastAssistant.suggested_follow_ups.length > 0) {
+          setFollowUpQuestions(lastAssistant.suggested_follow_ups.slice(0, 2));
+        } else if (lastUser?.content) {
+          setFollowUpQuestions(getContextualFollowUps(lastUser.content, selectedPlan));
+        } else {
+          setFollowUpQuestions([]);
+        }
       } else {
         setMessages([createWelcomeMessage(selectedPlan)]);
+        setFollowUpQuestions([]);
       }
 
       if (targetPlanId && targetPlanId !== selectedPlan.plan_id && onSwitchPlan) {
@@ -567,6 +745,11 @@ export function PlanChatScreen({
       }
 
       setMessages((prev) => [...prev, data.message]);
+      if (data.message?.suggested_follow_ups && data.message.suggested_follow_ups.length > 0) {
+        setFollowUpQuestions(data.message.suggested_follow_ups.slice(0, 2));
+      } else {
+        setFollowUpQuestions(getContextualFollowUps(query, selectedPlan));
+      }
       setHistoryRefreshTrigger((prev) => prev + 1);
     } catch (err) {
       const elapsed = Date.now() - startTime;
@@ -602,8 +785,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: 'Executive Summary',
-      prompt: 'Provide an executive summary of key benefits, hospital cash, and limits under this policy.',
-      desc: 'Overview of core coverage terms & daily allowances.'
+      prompt: 'Provide an executive summary of key benefits, hospital cash, and limits under this policy.'
     },
     {
       id: 'surgery',
@@ -613,8 +795,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: 'Surgical Benefits & Tiers',
-      prompt: 'Explain surgical insurance benefits, categories, and payable percentages.',
-      desc: 'Breakdown of Major Surgery tiers & Other Surgery daily benefits.'
+      prompt: 'Explain surgical insurance benefits, categories, and payable percentages.'
     },
     {
       id: 'comparison',
@@ -627,8 +808,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: selectedPlan.plan_id === 'HS-BASIC-001' ? 'Compare Basic with Gold' : 'Compare with Basic Plan',
-      prompt: selectedPlan.plan_id === 'HS-BASIC-001' ? 'Compare Health Shield Basic and Health Shield Gold' : 'Compare this plan with Health Shield Basic',
-      desc: 'Side-by-side comparative table of benefits & limits.'
+      prompt: selectedPlan.plan_id === 'HS-BASIC-001' ? 'Compare Health Shield Basic and Health Shield Gold' : 'Compare this plan with Health Shield Basic'
     },
     {
       id: 'waiting',
@@ -639,8 +819,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: 'Waiting Periods',
-      prompt: 'What are the waiting periods for pre-existing diseases and specific conditions?',
-      desc: 'Details on 30-day initial, 2-year specific, and pre-existing exclusion rules.'
+      prompt: 'What are the waiting periods for pre-existing diseases and specific conditions?'
     },
     {
       id: 'icu',
@@ -653,8 +832,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: 'ICU & Room Rent Limits',
-      prompt: 'What are the ICU daily limits, maximum days, and hospital stay criteria?',
-      desc: '24-hour hospitalization rules and ICU allowances.'
+      prompt: 'What are the ICU daily limits, maximum days, and hospital stay criteria?'
     },
     {
       id: 'claims',
@@ -665,8 +843,7 @@ export function PlanChatScreen({
         </svg>
       ),
       title: 'Claim Filing Process',
-      prompt: 'What is the claim filing procedure and documentation requirement?',
-      desc: 'Recommended step-by-step submission guidelines.'
+      prompt: 'What is the claim filing procedure and documentation requirement?'
     }
   ];
 
@@ -702,6 +879,11 @@ export function PlanChatScreen({
               const isUser = m.role === 'user';
               const hasCitations = m.citations && m.citations.length > 0;
               const isSourcesOpen = !!expandedSources[m.message_id];
+              const lastAssistantIndex = messages.map((msg) => msg.role).lastIndexOf('assistant');
+              const isLatestAssistant = !isUser && index === lastAssistantIndex && messages.some((msg) => msg.role === 'user');
+              const currentFollowUps = (m.suggested_follow_ups && m.suggested_follow_ups.length > 0)
+                ? m.suggested_follow_ups
+                : (isLatestAssistant ? followUpQuestions : []);
 
               return (
                 <div key={m.message_id} className={`chat-message-row ${isUser ? 'user' : 'assistant'}`}>
@@ -821,7 +1003,7 @@ export function PlanChatScreen({
                                         Pages {c.source_page_start}-{c.source_page_end}
                                       </span>
                                     </div>
-                                    <div className="citation-snippet">{c.snippet}</div>
+                                    <div className="citation-snippet">{c.snippet?.replace(/[\u20B9]\s*/g, "Rs. ")}</div>
                                   </div>
                                 ))}
                               </div>
@@ -908,6 +1090,32 @@ export function PlanChatScreen({
                         </div>
                       </div>
                     )}
+
+                    {/* Follow-up suggestions rendered below the assistant response */}
+                    {!isUser && isLatestAssistant && currentFollowUps && currentFollowUps.length > 0 && !loading && (
+                      <div className="response-follow-ups-container">
+                        <span className="response-follow-ups-label">
+                          <span style={{ fontSize: '11px', color: '#007AFF' }}>✦</span> Suggested follow-ups
+                        </span>
+                        <div className="response-follow-ups-row">
+                          {currentFollowUps.slice(0, 2).map((q, qIdx) => (
+                            <button
+                              key={qIdx}
+                              type="button"
+                              className="response-follow-up-pill"
+                              onClick={() => handleSendMessage(q)}
+                              title={`Ask follow-up: "${q}"`}
+                            >
+                              <span className="pill-text">{q.replace(/[\u20B9]\s*/g, "Rs. ")}</span>
+                              <svg className="pill-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <polyline points="12 5 19 12 12 19"></polyline>
+                              </svg>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* User Avatar Badge on the right for User Query */}
@@ -935,6 +1143,30 @@ export function PlanChatScreen({
 
         {/* Elevated Bottom Input Dock */}
         <div className="chat-bottom-dock">
+          {/* Liquid Glass Initial Suggested Questions - Strictly on New / First-Time Chat */}
+          {isFirstTimeOrNewChat && activeSuggestions && activeSuggestions.length > 0 && !loading && (
+            <div className="chat-suggestions-bar">
+              <div className="chat-suggestions-chips-row">
+                {activeSuggestions.map((q, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="chat-suggestion-chip"
+                    onClick={() => handleSendMessage(q)}
+                    title={`Ask: "${q}"`}
+                  >
+                    <span className="chip-sparkle">✦</span>
+                    <span className="chip-text">{q.replace(/[\u20B9]\s*/g, "Rs. ")}</span>
+                    <svg className="chip-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="chat-input-wrapper">
             <div className="chat-input-field-container">
               <span className="chat-input-prefix-icon" title="Query input">

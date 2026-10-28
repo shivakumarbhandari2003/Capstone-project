@@ -23,14 +23,13 @@ export function ProcessSidebar({
     assessment && (assessment.status === 'COMPLETED' || assessment.outcome)
   );
   const isPlanCompleted = Boolean(selectedPlan);
-  const isConfirmed = Boolean(
-    currentUser?.is_confirmed ||
-    currentUser?.confirmation_status === 'CONFIRMED' ||
-    currentUser?.confirmed_plan_id ||
-    selectedPlan?.is_confirmed ||
-    selectedPlan?.status === 'CONFIRMED' ||
-    selectedPlan?.confirmed_at
+  // Only consider confirmed if the active selected plan is confirmed or user holds a confirmed plan
+  const activeConfId = currentUser?.confirmed_plan_id || (currentUser?.is_confirmed ? selectedPlan?.plan_id : null);
+  const isThisPlanConfirmed = Boolean(
+    (selectedPlan?.is_confirmed || selectedPlan?.status === 'CONFIRMED') &&
+    (selectedPlan?.confirmed_at || (activeConfId && selectedPlan?.plan_id === activeConfId))
   );
+  const isConfirmed = isThisPlanConfirmed;
 
   const stages = [
     {
@@ -94,8 +93,8 @@ export function ProcessSidebar({
       : selectedPlan
       ? 'Review & finalize selection'
       : 'Select a plan first',
-    badge: isConfirmed ? 'Confirmed' : null,
-    badgeClass: isConfirmed ? 'gold' : null,
+    badge: isConfirmed ? 'Confirmed' : (selectedPlan ? 'Under Review' : null),
+    badgeClass: isConfirmed ? 'gold' : 'active-stage',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

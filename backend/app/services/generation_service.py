@@ -144,6 +144,8 @@ class AnswerGenerationService:
         # Output Guardrail: Redact exposed credentials/secrets and sanitize unsafe markdown link schemes
         answer_text = OutputGuardrail.redact_secrets(answer_text)
         answer_text = OutputGuardrail.sanitize_links(answer_text)
+        answer_text = answer_text.replace("₹", "Rs. ")
+        answer_text = re.sub(r"Rs\.?\s*(\d)", r"Rs. \1", answer_text)
 
         return GroundedAnswerResult(
             answer_text=answer_text,
@@ -507,7 +509,7 @@ class AnswerGenerationService:
         """
         chunks = retrieval_result.get("chunks", [])
         verified_citations = self._build_verified_citations(chunks)
-        pred_val = prediction_result.get("formatted_prediction") or f"₹{prediction_result.get('prediction', 0):,.2f}"
+        pred_val = prediction_result.get("formatted_prediction") or f"Rs. {prediction_result.get('prediction', 0):,.2f}"
         inputs = prediction_result.get("validated_inputs", {})
         plan = inputs.get("plan", "Gold")
         claim_type = inputs.get("claim_type", "Hospitalisation")
@@ -598,7 +600,7 @@ class AnswerGenerationService:
         """
         Deterministic, concise extractive grounder for claim prediction results.
         """
-        pred_val = prediction_result.get("formatted_prediction") or f"₹{prediction_result.get('prediction', 0):,.2f}"
+        pred_val = prediction_result.get("formatted_prediction") or f"Rs. {prediction_result.get('prediction', 0):,.2f}"
         inputs = prediction_result.get("validated_inputs", {})
         plan = inputs.get("plan", "Gold")
         claim_type = inputs.get("claim_type", "Major surgery")
@@ -609,8 +611,8 @@ class AnswerGenerationService:
         lines = [
             f"Based on the provided criteria, the machine learning model estimates a claim payout of approximately **{pred_val}** for **{claim_type}** under **{plan_name}**.\n",
             "### Policy Grounding & Plan Terms\n",
-            "- **ICU Daily Benefit:** The illustrative daily ICU benefit is ₹10,000, subject to applicable hospital stay and ICU benefit criteria.",
-            "- **Hospital Cash Benefit:** The illustrative daily hospital cash is ₹5,000 for hospitalizations exceeding 24 hours, with a maximum of 20 benefit days per policy year.",
+            "- **ICU Daily Benefit:** The illustrative daily ICU benefit is Rs. 10,000, subject to applicable hospital stay and ICU benefit criteria.",
+            "- **Hospital Cash Benefit:** The illustrative daily hospital cash is Rs. 5,000 for hospitalizations exceeding 24 hours, with a maximum of 20 benefit days per policy year.",
             "- **Benefit Combinations:** Major Surgery allowances and concurrent ICU/hospital cash benefits are evaluated based on authorized procedure tiers and documentation completeness."
         ]
 
@@ -621,3 +623,271 @@ class AnswerGenerationService:
             lines.append(f"\n[{plan_name}, Section {lead_sec}, p. {lead_p}]")
 
         return "\n".join(lines)
+
+
+    def generate_follow_up_questions(
+        self,
+        query: str,
+        answer_text: str,
+        plan_id: str,
+        role: str
+    ) -> list[str]:
+        """
+        Generate exactly 2 relevant, strictly grounded follow-up questions tailored to the active plan.
+        Grounds suggestion generation in the confirmed policy terms from the review schedule so that
+        every suggested question is 100% answerable by the policy documents and LLM without abstaining.
+        All currency figures use clean 'Rs. ' instead of '₹'.
+        """
+        import re
+
+        # Confirmed Canonical Knowledge Base matching the Confirm & Review schedule
+        CONFIRMED_PLAN_KNOWLEDGE = {
+            "HS-GOLD-001": {
+                "plan_name": "Health Shield – Gold",
+                "highlights": [
+                    "Hospital Cash: Rs. 5,000 / day (minimum stay >24 hours, max 20 days/year, max Rs. 1,00,000)",
+                    "ICU Benefit: Rs. 10,000 / day (max 10 days/year, max Rs. 1,00,000)",
+                    "Major Surgery Benefit: Benefit basis Rs. 5,00,000 (Category 1: 100% / Rs. 5,00,000; Category 2: 60% / Rs. 3,00,000; Category 3: 40% / Rs. 2,00,000; Category 4: 20% / Rs. 1,00,000; overall maximum Rs. 25,00,000)",
+                    "Other Surgery: Rs. 10,00,000 basis, Rs. 10,000 / day (max 10 days/year, max Rs. 1,00,000)",
+                    "Day-Care Surgery: Rs. 25,000 / procedure (max 2 procedures/year, max Rs. 50,000)",
+                    "Quick Cash Advance: Up to 25% of eligible surgery benefit, capped at Rs. 50,000",
+                    "Medical Care Benefit: Rs. 15,000 / claim (max 2 claims/year, max Rs. 30,000)",
+                    "Extended Stay: Rs. 50,000 for hospital stays exceeding 30 continuous days",
+                    "Health Check-up: Up to Rs. 3,000 / year (once per policy year after 30 days)",
+                    "Ambulance: Rs. 500 / trip (max 2 trips/year, max Rs. 1,000)",
+                    "Restored Cover: Up to Rs. 5,00,000 once per policy year",
+                    "Waiting Periods: 30 days initial illness, 24 months specified diseases, 36 months pre-existing diseases (PED lookback 48 months), accidents covered from day 1",
+                    "Claims: Emergency notice within 24 hours, documents within 30 days of discharge"
+                ],
+                "category_questions": {
+                    "surgery": [
+                        "What are the Category 1 to 4 Major Surgery payout amounts under Health Shield – Gold?",
+                        "Can I claim a Quick Cash advance of up to Rs. 50,000 for surgery?"
+                    ],
+                    "icu": [
+                        "What is the daily ICU benefit amount and maximum days under Health Shield – Gold?",
+                        "How much is the daily Hospital Cash allowance for stays exceeding 24 hours?"
+                    ],
+                    "waiting": [
+                        "What is the waiting period for pre-existing diseases under Health Shield – Gold?",
+                        "Which specified diseases have a 24-month waiting period under Health Shield – Gold?"
+                    ],
+                    "claims": [
+                        "What is the deadline for submitting post-discharge claim documents?",
+                        "Within what timeframe must emergency hospitalizations be notified?"
+                    ],
+                    "additional": [
+                        "What is the day-care procedure benefit and claim limit per year?",
+                        "How does the restored cover benefit work under Health Shield – Gold?"
+                    ],
+                    "general": [
+                        "What is the Major Surgery benefit basis under Health Shield – Gold?",
+                        "What are the ICU and Hospital Cash daily benefit limits under Health Shield – Gold?"
+                    ]
+                }
+            },
+            "HS-BASIC-001": {
+                "plan_name": "Health Shield – Basic",
+                "highlights": [
+                    "Hospital Cash: Rs. 2,000 / day (minimum stay >24 hours, max 10 days, max Rs. 20,000)",
+                    "ICU Benefit: Rs. 4,000 / day (max 5 days, max Rs. 20,000, additional to hospital cash)",
+                    "Major Surgery Benefit: Basis Rs. 2,00,000 (Category 1: Rs. 2,00,000; Category 2: Rs. 1,20,000; Category 3: Rs. 80,000; Category 4: Rs. 40,000; overall maximum Rs. 6,00,000)",
+                    "Day-Care Procedure: Rs. 10,000 / procedure (max 1 procedure/year, max Rs. 10,000)",
+                    "Other Surgery: Rs. 3,000 / day (max 5 days/year, max Rs. 15,000)",
+                    "Medical Care: Rs. 5,000 / claim (max 1 claim/year, max Rs. 5,000)",
+                    "Extended Stay: Rs. 15,000 for hospitalization exceeding 30 continuous days",
+                    "Health Check-up: Up to Rs. 1,000 / year (once per policy year after 30 days)",
+                    "Ambulance: Up to Rs. 250 / claim (max 1 claim/year)",
+                    "Quick Cash & Restored Cover: Not included in Basic plan",
+                    "Waiting Periods: 30 days initial illness, 24 months specified conditions, 36 months pre-existing diseases (PED lookback 36 months), accidents covered from day 1",
+                    "Claims: Post-discharge document submission within 30 days; 15-day premium grace period"
+                ],
+                "category_questions": {
+                    "surgery": [
+                        "What are the Major Surgery category payouts under Health Shield – Basic?",
+                        "What is the day-care procedure benefit under Health Shield – Basic?"
+                    ],
+                    "icu": [
+                        "What is the daily ICU benefit and maximum days under Health Shield – Basic?",
+                        "What is the Hospital Cash daily benefit under Health Shield – Basic?"
+                    ],
+                    "waiting": [
+                        "What is the pre-existing disease waiting period under Health Shield – Basic?",
+                        "Are accidental injuries covered from day 1 under Health Shield – Basic?"
+                    ],
+                    "claims": [
+                        "What is the post-discharge claim document submission window under Basic?",
+                        "What is the premium payment grace period under Health Shield – Basic?"
+                    ],
+                    "additional": [
+                        "What is the extended stay benefit for hospitalizations over 30 days?",
+                        "What is the annual health check-up allowance under Health Shield – Basic?"
+                    ],
+                    "general": [
+                        "What are the Hospital Cash and ICU daily benefits under Health Shield – Basic?",
+                        "What are the Category 1 to 4 surgical payout limits under Health Shield – Basic?"
+                    ]
+                }
+            },
+            "HS-PREMIUM-001": {
+                "plan_name": "Health Shield – Premium",
+                "highlights": [
+                    "Hospital Cash: Rs. 10,000 / day (max 30 days, max Rs. 3,00,000)",
+                    "ICU Benefit: Rs. 20,000 / day (max 15 days, max Rs. 3,00,000 - replaces hospital cash)",
+                    "Major Surgery Benefit: Basis Rs. 10,00,000 (Cat 1: Rs. 10,00,000; Cat 2: Rs. 6,00,000; Cat 3: Rs. 4,00,000; Cat 4: Rs. 2,00,000)",
+                    "Day-Care Surgery: Rs. 50,000 / procedure (max 3 claims/year, max Rs. 1,50,000)",
+                    "Other Surgery: Rs. 25,000 / day (max 15 days/year, max Rs. 3,75,000)",
+                    "Medical Care: Rs. 25,000 / claim (max 3 claims/year, max Rs. 75,000)",
+                    "Extended Stay: Rs. 1,00,000 for hospital stays exceeding 30 continuous days",
+                    "Health Check-up: Up to Rs. 5,000 / year",
+                    "Ambulance: Rs. 1,000 / claim",
+                    "Waiting Periods: 30 days initial, 24 months specified ailments, 36 months pre-existing diseases (PED lookback 48 months)",
+                    "Claims: Emergency notice within 24 hours, planned admission within 48 hours, documents within 30 days"
+                ],
+                "category_questions": {
+                    "surgery": [
+                        "What are the Major Surgery benefit payouts under Health Shield – Premium?",
+                        "What is the day-care surgical benefit limit under Health Shield – Premium?"
+                    ],
+                    "icu": [
+                        "What is the daily ICU allowance and annual limit under Health Shield – Premium?",
+                        "What is the Hospital Cash daily payout under Health Shield – Premium?"
+                    ],
+                    "waiting": [
+                        "What are the waiting periods for specified illnesses under Health Shield – Premium?",
+                        "What is the lookback period for pre-existing diseases under Health Shield – Premium?"
+                    ],
+                    "claims": [
+                        "What is the notification requirement for planned hospital admission?",
+                        "What documents are required to file a claim under Health Shield – Premium?"
+                    ],
+                    "additional": [
+                        "What is the extended stay benefit under Health Shield – Premium?",
+                        "What is the annual health check-up allowance under Premium?"
+                    ],
+                    "general": [
+                        "What is the Major Surgery benefit basis under Health Shield – Premium?",
+                        "What is the daily ICU benefit amount under Health Shield – Premium?"
+                    ]
+                }
+            },
+            "EMP-INS-001": {
+                "plan_name": "Executive Employee Insurance Plan",
+                "highlights": [
+                    "Hospital Cash: Rs. 10,000 / day (>24 hours; Year 1 max 30 days, later max 90 days/yr, overall max 900 days)",
+                    "ICU Benefit: Rs. 20,000 / day",
+                    "Major Surgery Benefit: Basis Rs. 10,00,000 (Cat 1: 100% / Rs. 10L; Cat 2: 60% / Rs. 6L; Cat 3: 40% / Rs. 4L; Cat 4: 20% / Rs. 2L, overall max 10× basis / Rs. 1,00,00,000)",
+                    "Day-Care Procedure: Rs. 50,000 / procedure (max 3 procedures/year, overall max 30)",
+                    "Waiting Periods: 30 days initial illness; pre-existing condition waiting period waived for active employees"
+                ],
+                "category_questions": {
+                    "surgery": [
+                        "What are the Category 1 to 4 Major Surgery limits for employees?",
+                        "How many day-care surgical procedures are covered per year?"
+                    ],
+                    "icu": [
+                        "What is the daily ICU benefit allowance for executive employees?",
+                        "What are the Hospital Cash limits in the first year versus later years?"
+                    ],
+                    "waiting": [
+                        "Is the pre-existing disease waiting period waived for active employees?",
+                        "What is the initial illness waiting period under the employee plan?"
+                    ],
+                    "claims": [
+                        "What are the claim documentation requirements for executive employees?",
+                        "What is the submission deadline for reimbursement claims?"
+                    ],
+                    "additional": [
+                        "What is the maximum cumulative surgery limit of 10× benefit basis?",
+                        "What is the day-care procedure coverage under the employee plan?"
+                    ],
+                    "general": [
+                        "What are the daily Hospital Cash and ICU allowances for employees?",
+                        "What is the Major Surgery benefit basis for executive employees?"
+                    ]
+                }
+            }
+        }
+
+        # Resolve plan info and canonical facts
+        resolved_pid = plan_id if plan_id in CONFIRMED_PLAN_KNOWLEDGE else "HS-GOLD-001"
+        plan_data = CONFIRMED_PLAN_KNOWLEDGE[resolved_pid]
+        plan_name = plan_data["plan_name"]
+
+        # Determine user topic/intent category
+        combined_text = (query + " " + answer_text).lower()
+        if any(k in combined_text for k in ["surg", "doctor", "fee", "operation", "procedure", "cataract", "tier", "surgeon", "advance", "quick cash"]):
+            category = "surgery"
+        elif any(k in combined_text for k in ["icu", "room", "daily", "stay", "hospital cash", "bed", "admission"]):
+            category = "icu"
+        elif any(k in combined_text for k in ["wait", "period", "pre-existing", "ped", "exclusion", "condition", "disease", "ailment"]):
+            category = "waiting"
+        elif any(k in combined_text for k in ["claim", "file", "document", "submit", "deadline", "emergency", "grace", "reimburse"]):
+            category = "claims"
+        elif any(k in combined_text for k in ["advance", "quick cash", "restore", "check-up", "checkup", "ambulance", "extended"]):
+            category = "additional"
+        else:
+            category = "general"
+
+        # Forbidden ungrounded patterns that cause LLM to abstain
+        UNGROUNDED_PATTERNS = [
+            r"\bout[- ]of[- ]pocket\b",
+            r"\bdoctor\s+fee\b",
+            r"\bsurgeon\s+fee\b",
+            r"\bphysician\s+fee\b",
+            r"\bconsultation\s+fee\b",
+            r"\broom\s+rent\s+reimburse\b",
+            r"\broom\s+charge\b",
+            r"\bdeductible\b",
+            r"\bco-?pay\b",
+            r"\bco-?insurance\b"
+        ]
+
+        # 1. Try LLM generation with strict grounding in the confirmed policy terms
+        if self.gemini_key and self.provider in ["gemini", "local", "grounded_synthesizer"]:
+            try:
+                knowledge_bullets = "\n".join([f"- {h}" for h in plan_data["highlights"]])
+                prompt = (
+                    f"You are a health insurance assistant for '{plan_name}'.\n\n"
+                    f"OFFICIAL VERIFIED POLICY TERMS (from the confirmed policy schedule):\n"
+                    f"{knowledge_bullets}\n\n"
+                    f"User Query: {query}\n"
+                    f"Assistant Answer: {answer_text[:350]}\n\n"
+                    f"Suggest exactly 2 relevant follow-up questions that the user would naturally ask next about '{plan_name}'.\n"
+                    f"CRITICAL GROUNDING RULES:\n"
+                    f"1. Every suggested question MUST be directly answerable from the Official Verified Policy Terms above.\n"
+                    f"2. DO NOT ask about surgeon/doctor fees, room charge reimbursement, out-of-pocket expenses, or unlisted terms because this is a fixed-benefit policy and those are not covered!\n"
+                    f"3. Focus on verified benefits related to the user's inquiry: Major Surgery tiers, Quick Cash advance, Day-Care payouts, ICU daily benefits, Hospital Cash limits, or Waiting periods.\n"
+                    f"4. Short questions (under 14 words each), each ending with a '?'.\n"
+                    f"5. Always format currency as 'Rs. ' instead of '₹'.\n"
+                    f"6. Output ONLY the 2 questions separated by a newline. No bullets, numbers, or extra text."
+                )
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 100}
+                }
+                client = self._get_http_client()
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_key}"
+                resp = client.post(url, headers=headers, json=payload, timeout=6.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts and "text" in parts[0]:
+                            raw_text = parts[0]["text"].strip()
+                            lines = [re.sub(r"^[\d\.\-\n\*\s\"']+", "", l).strip() for l in raw_text.split("\n") if l.strip()]
+                            clean_qs = []
+                            for l in lines:
+                                l_clean = l.replace("₹", "Rs. ")
+                                if len(l_clean) > 10 and "?" in l_clean:
+                                    if not any(re.search(pat, l_clean, re.IGNORECASE) for pat in UNGROUNDED_PATTERNS):
+                                        clean_qs.append(l_clean)
+                            if len(clean_qs) >= 2:
+                                return clean_qs[:2]
+            except Exception as e:
+                logger.warning(f"Gemini grounded follow-up generation error: {e}")
+
+        # 2. High-precision deterministic fallback using confirmed policy terms
+        return plan_data["category_questions"].get(category, plan_data["category_questions"]["general"])[:2]

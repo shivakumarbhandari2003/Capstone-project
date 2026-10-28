@@ -472,14 +472,12 @@ export function PlanSelectionScreen({
                   disabled={submittingPlanId === p.plan_id}
                 >
                   {submittingPlanId === p.plan_id ? (
-                    <span>Opening Assistant...</span>
+                    <span>Opening Review & Chat...</span>
                   ) : (
                     <>
                       <span>
-                        {isConfirmed
-                          ? (p.plan_id === confirmedPlanId
-                            ? 'Chat with Confirmed Plan'
-                            : `Chat with ${p.display_title || 'Plan'}`)
+                        {isConfirmed && p.plan_id === confirmedPlanId
+                          ? 'View Confirmed Plan / Chat'
                           : `Select ${p.display_title || 'Plan'}`}
                       </span>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

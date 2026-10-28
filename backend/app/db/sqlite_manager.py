@@ -1404,13 +1404,25 @@ class SQLiteManager:
             return selection_id
 
     def get_active_plan_selection_for_user(self, user_id: str) -> Optional[dict]:
-        """Returns the active or confirmed plan selection for a user, prioritizing confirmed plans."""
+        """Returns the active or confirmed plan selection for a user ordered by most recent created_at."""
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
                 SELECT * FROM plan_selections
                 WHERE user_id = ? AND status IN ('ACTIVE', 'CONFIRMED')
-                ORDER BY CASE WHEN status = 'CONFIRMED' THEN 1 ELSE 2 END, created_at DESC LIMIT 1
+                ORDER BY created_at DESC LIMIT 1
+            """, (user_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_confirmed_plan_selection_for_user(self, user_id: str) -> Optional[dict]:
+        """Returns the active confirmed plan selection for a user, if one exists."""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM plan_selections
+                WHERE user_id = ? AND status = 'CONFIRMED'
+                ORDER BY confirmed_at DESC, created_at DESC LIMIT 1
             """, (user_id,))
             row = cur.fetchone()
             return dict(row) if row else None

@@ -18,9 +18,8 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
       const rect = conditionDropdownRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      // Default to opening upward because the field sits near the bottom of the card/screen;
-      // only drop down if there is generous space below (> 300px) and it exceeds spaceAbove
-      if (spaceBelow >= 300 && spaceBelow > spaceAbove) {
+      // All 8 options without description take ~310px height
+      if (spaceBelow >= 320 && spaceBelow > spaceAbove) {
         setDropUp(false);
       } else {
         setDropUp(true);
@@ -38,14 +37,14 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
 
   // Authoritative condition list from model_info.json
   const allowedConditions = [
-    { id: 'None', label: 'None / No Known Conditions', desc: 'No active medical diagnoses' },
-    { id: 'Hypertension', label: 'Hypertension', desc: 'Managed high blood pressure' },
-    { id: 'Diabetes', label: 'Diabetes', desc: 'Type 1 or Type 2 condition' },
-    { id: 'Heart_Disease', label: 'Heart Disease', desc: 'Cardiac or cardiovascular history' },
-    { id: 'Thyroid_Disorder', label: 'Thyroid Disorder', desc: 'Hypo/hyperthyroidism' },
-    { id: 'Other condition', label: 'Other Condition', desc: 'Other diagnosed chronic condition' },
-    { id: 'Multiple', label: 'Multiple Conditions', desc: 'Two or more concurrent conditions' },
-    { id: 'Not sure', label: 'Not Sure', desc: 'Pending diagnosis or uncertain status' }
+    { id: 'None', label: 'None / No Known Conditions' },
+    { id: 'Hypertension', label: 'Hypertension' },
+    { id: 'Diabetes', label: 'Diabetes' },
+    { id: 'Heart_Disease', label: 'Heart Disease' },
+    { id: 'Thyroid_Disorder', label: 'Thyroid Disorder' },
+    { id: 'Other condition', label: 'Other Condition' },
+    { id: 'Multiple', label: 'Multiple Conditions' },
+    { id: 'Not sure', label: 'Not Sure' }
   ];
 
   // Live BMI Calculation: weight_kg / (height_cm / 100) ** 2
@@ -132,7 +131,7 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
 
   const selectedConditionObj = useMemo(() => {
     if (!condition) {
-      return { id: '', label: 'Select Pre-existing Condition', desc: 'Choose a condition category from the list' };
+      return { id: '', label: 'Select Pre-existing Condition' };
     }
     return allowedConditions.find((c) => c.id === condition) || allowedConditions[0];
   }, [condition, allowedConditions]);
@@ -809,10 +808,11 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
                   onClick={handleToggleDropdown}
                   style={{
                     width: '100%',
+                    minHeight: '48px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '13px 16px',
+                    padding: '12px 16px',
                     background: 'rgba(255, 255, 255, 0.75)',
                     backdropFilter: 'blur(16px)',
                     WebkitBackdropFilter: 'blur(16px)',
@@ -827,13 +827,8 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
                     outline: 'none'
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#000000' }}>
-                      {selectedConditionObj.label}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>
-                      {selectedConditionObj.desc}
-                    </div>
+                  <div style={{ minWidth: 0, flex: 1, fontSize: '15.5px', fontWeight: condition ? 700 : 500, color: condition ? '#000000' : '#64748b' }}>
+                    {selectedConditionObj.label}
                   </div>
                   <svg
                     width="18"
@@ -865,20 +860,19 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
                       left: 0,
                       right: 0,
                       zIndex: 100,
-                      background: 'rgba(255, 255, 255, 0.96)',
+                      background: 'rgba(255, 255, 255, 0.98)',
                       backdropFilter: 'blur(28px)',
                       WebkitBackdropFilter: 'blur(28px)',
-                      border: '1.5px solid rgba(255, 255, 255, 0.95)',
+                      border: '1.5px solid rgba(226, 232, 240, 0.95)',
                       borderRadius: '16px',
                       boxShadow: dropUp
-                        ? '0 -16px 40px rgba(0, 0, 0, 0.12), 0 -4px 12px rgba(0, 0, 0, 0.04)'
-                        : '0 16px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04)',
+                        ? '0 -16px 40px rgba(0, 0, 0, 0.14), 0 -4px 12px rgba(0, 0, 0, 0.05)'
+                        : '0 16px 40px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.05)',
                       padding: '6px',
-                      maxHeight: '260px',
-                      overflowY: 'auto',
+                      overflow: 'visible',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '4px',
+                      gap: '2px',
                       animation: 'authCardFadeIn 0.18s ease-out'
                     }}
                   >
@@ -892,7 +886,7 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
                             setIsConditionDropdownOpen(false);
                           }}
                           style={{
-                            padding: '11px 14px',
+                            padding: '9px 14px',
                             borderRadius: '10px',
                             cursor: 'pointer',
                             background: isSelected ? 'rgba(0, 122, 255, 0.1)' : 'transparent',
@@ -913,14 +907,9 @@ export function EligibilityScreen({ user, onAssessmentComplete, onCancel }) {
                             }
                           }}
                         >
-                          <div>
-                            <div style={{ fontSize: '15.5px', fontWeight: isSelected ? 700 : 600, color: isSelected ? '#007AFF' : '#000000' }}>
-                              {c.label}
-                            </div>
-                            <div style={{ fontSize: '13px', color: isSelected ? '#0284c7' : '#64748b', marginTop: '2px' }}>
-                              {c.desc}
-                            </div>
-                          </div>
+                          <span style={{ fontSize: '15px', fontWeight: isSelected ? 700 : 500, color: isSelected ? '#007AFF' : '#000000' }}>
+                            {c.label}
+                          </span>
                           {isSelected && (
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#007AFF" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: '8px' }}>
                               <polyline points="20 6 9 17 4 12" />

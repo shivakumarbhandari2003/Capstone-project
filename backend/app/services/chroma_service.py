@@ -1,4 +1,6 @@
 import json
+import time
+import threading
 from pathlib import Path
 from typing import Optional, Any
 import chromadb
@@ -6,8 +8,6 @@ from chromadb.config import Settings as ChromaSettings
 from backend.app.models.chunk import ValidatedChunk, ParentChunk
 from backend.app.core.config import settings
 from backend.app.core.logging_config import logger
-
-import threading
 
 class ChromaStorageService:
     """
@@ -17,6 +17,21 @@ class ChromaStorageService:
     _shared_client: Any = None
     _shared_collections: dict = {}
     _lock = threading.Lock()
+    _mutation_version: int = 0
+    _last_mutation_timestamp: float = 0.0
+
+    @classmethod
+    def record_mutation(cls) -> int:
+        """Records a storage mutation (ingest, update, delete) to track index staleness."""
+        with cls._lock:
+            cls._mutation_version += 1
+            cls._last_mutation_timestamp = time.time()
+            return cls._mutation_version
+
+    @classmethod
+    def get_mutation_version(cls) -> int:
+        """Returns the current mutation version of ChromaDB storage."""
+        return cls._mutation_version
 
     def __init__(self, persist_path: Optional[Path] = None):
         self.collection_name = settings.CHROMA_COLLECTION_NAME
@@ -157,6 +172,9 @@ class ChromaStorageService:
 
         # Persist parent records to durable parent store
         self._persist_parent_records(parents)
+
+        # Record storage mutation to notify lexical indexers of fresh data
+        self.record_mutation()
 
         total_in_collection = self.collection.count()
         logger.info(

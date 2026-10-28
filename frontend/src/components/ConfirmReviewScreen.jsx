@@ -372,16 +372,25 @@ export function ConfirmReviewScreen({
     return () => { isMounted = false; };
   }, [planId]);
 
-  // Sync confirmation state from currentUser or selectedPlan on mount / updates
+  // Sync confirmation state from currentUser or selectedPlan strictly for THIS planId
   useEffect(() => {
-    if (currentUser?.is_confirmed || selectedPlan?.status === 'CONFIRMED' || selectedPlan?.confirmed_at) {
+    const activeConfId = currentUser?.confirmed_plan_id;
+    const isThisPlanConfirmed = Boolean(
+      (selectedPlan?.is_confirmed || selectedPlan?.status === 'CONFIRMED') ||
+      (activeConfId && activeConfId === planId)
+    );
+
+    if (isThisPlanConfirmed) {
       setConfirmedState({
         isConfirmed: true,
-        confirmedAt: currentUser?.confirmed_at || selectedPlan?.confirmed_at || new Date().toISOString(),
-        selectionId: currentUser?.selected_plan_id || selectedPlan?.plan_id
+        confirmedAt: selectedPlan?.confirmed_at || currentUser?.confirmed_at || new Date().toISOString(),
+        selectionId: planId,
+        planName: pDetails?.plan_name || selectedPlan?.plan_name
       });
+    } else {
+      setConfirmedState(null);
     }
-  }, [currentUser, selectedPlan]);
+  }, [currentUser, selectedPlan, planId]);
 
   const activeData = reviewData || FALLBACK_PLAN_REVIEW_DATA[planId] || FALLBACK_PLAN_REVIEW_DATA['HS-GOLD-001'];
   const pDetails = activeData.plan_details;
@@ -1325,6 +1334,37 @@ export function ConfirmReviewScreen({
           </button>
         )}
 
+        {/* Continue to Chat Button when Confirmed */}
+        {confirmedState?.isConfirmed && (
+          <button
+            type="button"
+            onClick={handleProceedToChat}
+            className="auth-submit-btn"
+            style={{
+              margin: 0,
+              padding: '12px 28px',
+              minHeight: '44px',
+              borderRadius: '9999px',
+              background: 'linear-gradient(135deg, #0284c7 0%, #007aff 100%)',
+              boxShadow: '0 4px 14px rgba(0, 122, 255, 0.35)',
+              border: '1px solid rgba(0, 122, 255, 0.9)',
+              color: '#FFFFFF',
+              fontSize: '14.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span>Continue to Policy Chat</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        )}
+
         {/* Confirm Plan Button / Confirmed Badge */}
         <button
           type="button"
@@ -1508,69 +1548,81 @@ export function ConfirmReviewScreen({
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <button
                 type="button"
                 className="auth-submit-btn"
-                onClick={handlePrintPdf}
+                onClick={handleProceedToChat}
                 style={{
                   width: '100%',
-                  padding: '12px 24px',
-                  minHeight: '46px',
+                  padding: '14px 24px',
+                  minHeight: '48px',
                   fontSize: '15px',
                   fontWeight: 700,
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  background: 'linear-gradient(135deg, #0284c7 0%, #007aff 100%)',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   borderRadius: '14px',
-                  boxShadow: '0 4px 16px rgba(0, 122, 255, 0.35)',
+                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)',
+                  color: '#ffffff',
                   cursor: 'pointer'
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                  <rect x="6" y="14" width="12" height="8"></rect>
+                <span>Continue to Policy Chat</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
                 </svg>
-                <span>Print / Save as PDF</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleModalClose}
-                style={{
-                  width: '100%',
-                  padding: '11px 16px',
-                  borderRadius: '12px',
-                  border: '1.2px solid rgba(203, 213, 225, 0.9)',
-                  background: '#ffffff',
-                  color: '#1D1D1F',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Stay on Review Screen
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={handleModalClose}
+                  style={{
+                    flex: 1,
+                    padding: '11px 16px',
+                    borderRadius: '12px',
+                    border: '1.2px solid rgba(203, 213, 225, 0.9)',
+                    background: '#ffffff',
+                    color: '#1D1D1F',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  View Confirmed Summary
+                </button>
 
-              <button
-                type="button"
-                onClick={handleProceedToChat}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#007AFF',
-                  fontSize: '13.5px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  padding: '6px',
-                  textDecoration: 'underline'
-                }}
-              >
-                Continue to Policy Chat ➔
-              </button>
+                <button
+                  type="button"
+                  onClick={handlePrintPdf}
+                  style={{
+                    flex: 1,
+                    padding: '11px 16px',
+                    borderRadius: '12px',
+                    border: '1.2px solid rgba(203, 213, 225, 0.9)',
+                    background: '#ffffff',
+                    color: '#1D1D1F',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  <span>Print PDF</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -101,8 +101,8 @@ class HybridRetrievalService:
         # Step 3: BM25 Lexical Retrieval
         bm25_results = self.bm25_service.search(query, authorized_scope, top_k=top_k * 2)
 
-        # Step 4: Reciprocal Rank Fusion (RRF)
-        fused_chunks = self._reciprocal_rank_fusion(dense_results, bm25_results, rrf_k=rrf_k, top_k=top_k)
+        # Step 4: Reciprocal Rank Fusion (RRF) with targeted benefit alignment
+        fused_chunks = self._reciprocal_rank_fusion(dense_results, bm25_results, query=query, rrf_k=rrf_k, top_k=top_k)
 
         # Step 5: Post-fusion Security Filter
         sanitized_chunks = AuthorizationService.sanitize_retrieved_chunks(role, fused_chunks)
@@ -173,12 +173,14 @@ class HybridRetrievalService:
         self,
         dense_results: list[dict],
         bm25_results: list[dict],
-        rrf_k: int,
-        top_k: int
+        query: str = "",
+        rrf_k: int = RRF_K_DEFAULT,
+        top_k: int = 5
     ) -> list[dict]:
         """
         Calculates RRF score: score = sum(1 / (k + rank)) across available systems.
         Preserves original ranks and applies deterministic tie-breaking.
+        Applies plan-scoped benefit section alignment boost when query explicitly names a benefit.
         """
         candidates: dict[str, dict] = {}
 
@@ -211,6 +213,35 @@ class HybridRetrievalService:
                     "bm25_rank": item["bm25_rank"],
                     "rrf_score": 1.0 / (rrf_k + item["bm25_rank"])
                 }
+
+        # Benefit-specific section alignment boost
+        if query:
+            q_lower = query.lower()
+            benefit_title_keywords = [
+                ("other surgery", ["other surgery"]),
+                ("hospital cash", ["hospital cash"]),
+                ("icu", ["icu", "intensive care"]),
+                ("day-care", ["day-care", "day care"]),
+                ("day care", ["day-care", "day care"]),
+                ("cataract", ["day-care", "day care"]),
+                ("medical management", ["medical management"]),
+                ("extended stay", ["extended hospital stay", "extended stay"]),
+                ("health check", ["health check", "check-up", "checkup"]),
+                ("restor", ["restored cover", "restoration", "additional benefits"]),
+                ("quick cash", ["quick cash", "additional benefits"]),
+                ("annual premium", ["premium and payment", "premium details"]),
+                ("renewal premium", ["premium and payment", "premium details"]),
+            ]
+            for cand in candidates.values():
+                sec_title = (cand.get("metadata", {}).get("section_title") or "").lower()
+                for q_term, title_terms in benefit_title_keywords:
+                    if q_term in q_lower and any(tt in sec_title for tt in title_terms):
+                        cand["rrf_score"] += 0.05
+                        break
+
+                # Penalize unrelated claim-free table when claim-free or increase is not in query
+                if "claim-free" in sec_title and not any(w in q_lower for w in ["claim-free", "claim free", "bonus", "increase", "no claim"]):
+                    cand["rrf_score"] -= 0.03
 
         # Deterministic sorting: RRF score descending, then dense rank ascending, then chunk_id string
         sorted_candidates = sorted(

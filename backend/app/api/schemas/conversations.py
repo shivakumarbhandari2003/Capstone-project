@@ -27,6 +27,7 @@ class MessageResponse(BaseModel):
     is_comparison: bool = False
     is_clarification: bool = False
     contains_unverified_notice: bool = False
+    suggested_follow_ups: list[str] = []
 
 class ConversationResponse(BaseModel):
     conversation_id: str
@@ -49,4 +50,3 @@ class SendMessageResponse(BaseModel):
     message: MessageResponse
     scope_resolution: dict
     retrieval_diagnostics: dict
-

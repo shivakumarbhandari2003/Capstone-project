@@ -78,10 +78,51 @@ function renderInline(text) {
  * - Headings (###, ##, #)
  * - Clean paragraphs
  */
+
+// Clean LaTeX / math artifacts (\text{}, \times, $$, &&, etc.) into clean plain-text formula formatting
+function cleanFormulasAndLatex(text) {
+  if (!text) return '';
+  let cleaned = text;
+
+  // Clean LaTeX environments: \begin{...}, \end{...}
+  cleaned = cleaned.replace(/\\(begin|end)\{[a-zA-Z0-9_*]+\}/g, '');
+
+  // Clean alignment markers &&, &, \\
+  cleaned = cleaned.replace(/\s*&&\s*/g, ' ');
+  cleaned = cleaned.replace(/\\\\\s*/g, '\n');
+
+  // Clean \text{...} or /text{...}
+  cleaned = cleaned.replace(/[/\\]text\{([^}]+)\}/g, '$1');
+
+  // Math operators
+  cleaned = cleaned.replace(/\\times\b/g, '×');
+  cleaned = cleaned.replace(/\\cdot\b/g, '·');
+  cleaned = cleaned.replace(/\\div\b/g, '÷');
+  cleaned = cleaned.replace(/\\approx\b/g, '≈');
+  cleaned = cleaned.replace(/\\le(q)?\b/g, '≤');
+  cleaned = cleaned.replace(/\\ge(q)?\b/g, '≥');
+  cleaned = cleaned.replace(/\\neq\b/g, '≠');
+  cleaned = cleaned.replace(/\\min\b/g, 'min');
+  cleaned = cleaned.replace(/\\max\b/g, 'max');
+
+  // Strip math delimiters $$ ... $$ or $ ... $
+  cleaned = cleaned.replace(/\$\$([\s\S]+?)\$\$/g, '$1');
+  cleaned = cleaned.replace(/\$([^$\n]+?)\$/g, '$1');
+
+  // Fractions: \frac{a}{b} -> (a / b)
+  cleaned = cleaned.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
+
+  // Replace Rupee symbol ₹ or unicode \u20B9 with Rs.
+  cleaned = cleaned.replace(/[\u20B9]\s*/g, 'Rs. ');
+
+  return cleaned;
+}
+
 export default function MarkdownContent({ content }) {
   if (!content) return null;
 
-  const lines = content.split('\n');
+  const sanitizedContent = cleanFormulasAndLatex(content);
+  const lines = sanitizedContent.split('\n');
   const elements = [];
   let i = 0;
 

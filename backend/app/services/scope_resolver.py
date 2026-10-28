@@ -31,7 +31,10 @@ PLAN_KEYWORDS: dict[str, str] = {
     "gold": "HS-GOLD-001",
     "hs-gold": "HS-GOLD-001",
     "hs-gold-001": "HS-GOLD-001",
-    "premium": "HS-PREMIUM-001",
+    "health shield premium": "HS-PREMIUM-001",
+    "premium plan": "HS-PREMIUM-001",
+    "premium policy": "HS-PREMIUM-001",
+    "premium tier": "HS-PREMIUM-001",
     "hs-premium": "HS-PREMIUM-001",
     "hs-premium-001": "HS-PREMIUM-001",
     "employee": "EMP-INS-001",
@@ -150,6 +153,22 @@ class ScopeResolver:
             if re.search(rf"\b{re.escape(word)}\b", q_lower):
                 detected_plans.add(pid)
                 has_insurance_intent = True
+
+        # Special check for bare "premium": Only treat as HS-PREMIUM-001 if explicitly used as plan name or comparison
+        if "HS-PREMIUM-001" not in detected_plans and re.search(r"\bpremium\b", q_lower):
+            is_cost_context = bool(
+                re.search(r"\b(annual|monthly|renewal|guaranteed|total|quarterly|half-yearly|tax|taxes|pay|paying|deduct|deducted|salary|rate|amount|waiver|protection)\s+premium\b", q_lower) or
+                re.search(r"\bpremium\s+(?:of|is|rate|amount|cost|payment|waiver|protection|table|schedule|deducted|due)\b", q_lower) or
+                re.search(r"\bmy\s+premium\b", q_lower) or
+                re.search(r"\bpremium\s+(?:will\s+be\s+deducted|would\s+be)\b", q_lower)
+            )
+            is_plan_context = bool(
+                re.search(r"\b(compare|versus|vs|between|or|with)\s+.*?\bpremium\b", q_lower) or
+                re.search(r"\bpremium\s+(?:and|or|vs|versus)\b", q_lower)
+            )
+            if is_plan_context and not is_cost_context:
+                detected_plans.add("HS-PREMIUM-001")
+            has_insurance_intent = True
 
         # Check follow-up context if pronouns used
         follow_up_tokens = ["its", "it", "that", "those", "this", "these", "does it", "is there", "what about", "is it covered", "how much is covered"]

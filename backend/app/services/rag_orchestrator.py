@@ -212,6 +212,14 @@ class RAGOrchestrator:
             retrieved_chunk_ids=retrieved_chunk_ids
         )
 
+        # Generate exactly 2 relevant contextual follow-up questions
+        follow_up_qs = self.generation_service.generate_follow_up_questions(
+            query=sanitized_query,
+            answer_text=final_answer_text,
+            plan_id=session.selected_plan_id,
+            role=user.role
+        )
+
         # 5. Persist turn to conversation session
         assistant_msg = self.conversation_manager.add_turn(
             conversation_id=conversation_id,
@@ -222,7 +230,8 @@ class RAGOrchestrator:
             effective_scope=scope_result.effective_scope,
             is_comparison=scope_result.is_comparison,
             is_clarification=False,
-            contains_unverified=answer_res.contains_unverified_notice
+            contains_unverified=answer_res.contains_unverified_notice,
+            suggested_follow_ups=follow_up_qs
         )
 
         # 6. Record telemetry safely into persistent database

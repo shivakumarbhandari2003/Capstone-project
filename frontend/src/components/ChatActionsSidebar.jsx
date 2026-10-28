@@ -291,11 +291,7 @@ export function ChatActionsSidebar({
         {activeTab === 'quick_actions' && (
           <div className="actions-panel-content">
             <div className="actions-panel-intro">
-              <span className="actions-panel-eyebrow">GROUNDED INTELLIGENCE</span>
               <h4 className="actions-panel-title">Policy Quick Actions</h4>
-              <p className="actions-panel-desc">
-                Select an action to instantly retrieve verified terms, payout limits, or clause breakdowns.
-              </p>
             </div>
 
             <div className="actions-cards-stack">
@@ -310,7 +306,6 @@ export function ChatActionsSidebar({
                   <div className="action-card-icon-box">{action.icon}</div>
                   <div className="action-card-info">
                     <div className="action-card-title">{action.title}</div>
-                    <div className="action-card-desc">{action.desc}</div>
                   </div>
                   <svg
                     className="action-card-arrow"

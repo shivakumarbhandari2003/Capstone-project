@@ -316,8 +316,13 @@ export function App() {
               setSelectedPlan(restoredPlan);
               sessionStorage.setItem('ins_app_selected_plan', JSON.stringify(restoredPlan));
 
-              setActiveTab('chat');
-              sessionStorage.setItem('ins_app_active_tab', 'chat');
+              if (isThisConfirmed) {
+                setActiveTab('chat');
+                sessionStorage.setItem('ins_app_active_tab', 'chat');
+              } else {
+                setActiveTab('plans');
+                sessionStorage.setItem('ins_app_active_tab', 'plans');
+              }
             } else {
               setSelectedPlan(null);
               sessionStorage.removeItem('ins_app_selected_plan');
@@ -374,36 +379,33 @@ export function App() {
   };
 
   const handleSelectPlan = async (plan) => {
-    const isUserConfirmed = Boolean(
-      currentUser?.is_confirmed ||
-      currentUser?.confirmation_status === 'CONFIRMED' ||
-      currentUser?.confirmed_plan_id ||
-      confirmedPlanId
-    );
-
-    if (isUserConfirmed) {
-      // User has already confirmed a policy.
-      // Selecting another plan is strictly for chatbot response and exploration.
-      // Do NOT call eligibilityApi.selectPlan() to preserve the confirmed policy in the database.
+    try {
+      const res = await eligibilityApi.selectPlan(plan.plan_id);
       const activeConfId = confirmedPlanId || currentUser?.confirmed_plan_id;
-      const isConfirmedPolicy = plan.plan_id === activeConfId;
-      const chatPlan = {
-        ...plan,
-        is_confirmed: isConfirmedPolicy,
-        status: isConfirmedPolicy ? 'CONFIRMED' : 'EXPLORING'
-      };
-      setSelectedPlan(chatPlan);
-      setActiveTab('chat');
-      sessionStorage.setItem('ins_app_selected_plan', JSON.stringify(chatPlan));
-      sessionStorage.setItem('ins_app_active_tab', 'chat');
-      return;
-    }
+      const isThisPlanConfirmed = Boolean(
+        res?.status === 'CONFIRMED' ||
+        (activeConfId && activeConfId === plan.plan_id)
+      );
 
-    await eligibilityApi.selectPlan(plan.plan_id);
-    setSelectedPlan(plan);
-    setActiveTab('chat');
-    sessionStorage.setItem('ins_app_selected_plan', JSON.stringify(plan));
-    sessionStorage.setItem('ins_app_active_tab', 'chat');
+      const planToSet = {
+        ...plan,
+        is_confirmed: isThisPlanConfirmed,
+        status: isThisPlanConfirmed ? 'CONFIRMED' : 'ACTIVE',
+        confirmed_at: isThisPlanConfirmed ? (res?.confirmed_at || confirmedPlan?.confirmed_at || currentUser?.confirmed_at) : null
+      };
+
+      setSelectedPlan(planToSet);
+      sessionStorage.setItem('ins_app_selected_plan', JSON.stringify(planToSet));
+
+      // As per requirement:
+      // eligibility check -> choose plan -> chatbot & confirm options enabled in sidebar -> user sees & reviews it -> confirms manually with pop up
+      // Direct user to 'confirm' (Confirm & Review) to see and review the plan:
+      setActiveTab('confirm');
+      sessionStorage.setItem('ins_app_active_tab', 'confirm');
+    } catch (err) {
+      console.error("Plan selection error:", err);
+      throw err;
+    }
   };
 
   const handleBackToPlans = () => {
