@@ -89,15 +89,29 @@ class AnswerGenerationService:
         # 2. Handle unauthorized employee plan requests
         denied_notice = None
         if denied_plans:
-            denied_notice = "Access to the Executive Employee Insurance Plan (EMP-INS-001) is restricted to authenticated employees. Only authorized customer policy terms are displayed below."
+            denied_notice = (
+                "I understand you are interested in the Executive Employee Insurance Plan (EMP-INS-001). "
+                "However, access to employee-only plan terms is restricted to authenticated corporate employees under our access policy. "
+                "Only authorized customer policy terms are displayed below."
+            )
 
         chunks = retrieval_result.get("chunks", [])
         if not chunks:
             p_info = get_plan_by_id(selected_plan_id)
             plan_name = p_info.plan_name if p_info else selected_plan_id
-            abstention_msg = (
-                f"> **Access Restriction Notice:** {denied_notice}\n\n" if denied_notice else ""
-            ) + f"The available policy documents for **{plan_name}** do not specify coverage terms, limits, or waiting periods for this condition or query. Please consult your official policy schedule or authorized insurance representative."
+            if denied_plans:
+                abstention_msg = (
+                    f"> **Access Restriction Notice:** {denied_notice}\n\n"
+                    f"I cannot provide details for the Executive Employee Insurance Plan because it is restricted to authenticated employee accounts. "
+                    f"However, I would be glad to help you explore the benefits, limits, and claim conditions for your authorized plan, **{plan_name}**. "
+                    f"What would you like to know about **{plan_name}**?"
+                )
+            else:
+                abstention_msg = (
+                    f"I'd like to give you an accurate answer, but I couldn't verify this detail from the policy information currently available for **{plan_name}**. "
+                    f"The available policy documents for **{plan_name}** do not specify coverage terms, limits, or waiting periods for this condition or query. "
+                    f"I don't want to mislead you, so please consult your official policy schedule or an authorized insurance representative."
+                )
             return GroundedAnswerResult(
                 answer_text=abstention_msg,
                 citations=[],
@@ -303,7 +317,8 @@ class AnswerGenerationService:
                 sec_ref = f"[{pname}, Section {meta.get('section_number')}, p. {meta.get('source_page_start')}]"
                 comparison_lines.append(f"- **{pname}**: {first_sentence}. {sec_ref}")
 
-            return "\n".join(comparison_lines)
+            ans = "\n".join(comparison_lines).replace("₹", "Rs. ")
+            return re.sub(r"Rs\.?\s*(\d)", r"Rs. \1", ans)
 
         # 2. Single-plan query response
         plan_chunks = chunks_by_plan.get(selected_plan_id, chunks)
@@ -322,7 +337,7 @@ class AnswerGenerationService:
             if not any(kw in all_chunk_text for kw in queried_topics):
                 p_info = get_plan_by_id(selected_plan_id)
                 p_name = p_info.plan_name if p_info else selected_plan_id
-                return f"The available policy documents for **{p_name}** do not specify coverage terms, limits, or waiting periods for {', '.join(queried_topics)}. Please consult an authorized insurance representative or review the official policy schedule for unlisted terms."
+                return f"I'd like to give you an accurate answer, but I couldn't verify this detail from the policy information currently available. The available policy documents for **{p_name}** do not specify coverage terms, limits, or waiting periods for {', '.join(queried_topics)}. I want to make sure you have the exact details, so please consult an authorized insurance representative or review your official policy schedule for these specific terms."
 
         # Score and rank chunks by query word overlap
         query_words = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", q_clean)) - {
@@ -340,7 +355,7 @@ class AnswerGenerationService:
         plan_name = p_info.plan_name if p_info else selected_plan_id
 
         if not best_chunk or (query_words and score_chunk(best_chunk) == 0):
-            return f"I am unable to answer this question because the available policy documents for **{plan_name}** do not specify this information. Please consult an authorized insurance representative or your policy schedule."
+            return f"I'd like to give you an accurate answer, but I couldn't verify this detail from the policy information currently available. I am unable to answer this question because the available policy documents for **{plan_name}** do not specify this information. Please consult an authorized insurance representative or your policy schedule for complete details."
 
         meta = best_chunk.get("metadata", {})
         sec_num = meta.get("section_number", "")
@@ -396,7 +411,9 @@ class AnswerGenerationService:
             first_sentence = chunk_text.split(".")[0].strip()
             matching_snippets.append(f"- {first_sentence}.")
 
-        return "\n".join(matching_snippets) + f"\n\n{citation_str}"
+        ans = "\n".join(matching_snippets) + f"\n\n{citation_str}"
+        ans = ans.replace("₹", "Rs. ")
+        return re.sub(r"Rs\.?\s*(\d)", r"Rs. \1", ans)
 
     def _call_gemini(
         self,

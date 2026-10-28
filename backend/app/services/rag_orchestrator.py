@@ -199,6 +199,14 @@ class RAGOrchestrator:
                 f"I can't answer questions about {oos_topic} because they are outside my scope.\n\n"
                 f"Regarding your insurance question:\n{final_answer_text}"
             )
+        elif scope_result.greeting_prefix:
+            clean_ans_lower = final_answer_text.lower().strip()
+            starts_with_greeting = any(
+                clean_ans_lower.startswith(g)
+                for g in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "welcome"]
+            )
+            if not starts_with_greeting:
+                final_answer_text = f"Hello! I would be glad to help clarify that for you.\n\n{final_answer_text}"
 
         # Output Guardrail: Validate and prune any fabricated or unauthorized plan citations
         authorized_plans = ROLE_PLAN_PERMISSIONS.get(user.role, set())

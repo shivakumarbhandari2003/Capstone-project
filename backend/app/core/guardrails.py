@@ -98,7 +98,7 @@ class InputGuardrail:
                     return (
                         sanitized,
                         True,
-                        "I cannot process this request because it contains instructions attempting to override system directives, security boundaries, or internal configuration."
+                        "I'm sorry, but I cannot process this request because it violates security boundaries. To ensure system security and reliable guidance, I cannot override my operating instructions, safety directives, or configuration. I'm here to assist you with questions about your health insurance policy, benefits, and claims."
                     )
 
         # 2. System Prompt & Instruction Disclosure screening

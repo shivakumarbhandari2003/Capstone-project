@@ -20,6 +20,7 @@ class ScopeResolutionResult(BaseModel):
     mixed_insurance_query: Optional[str] = None
     mixed_unrelated_topic: Optional[str] = None
     greeting_message: Optional[str] = None
+    greeting_prefix: Optional[str] = None
     clarification_prompt: Optional[str] = None
     resolved_query: Optional[str] = None
     denied_plans: list[str] = Field(default_factory=list)
@@ -43,10 +44,24 @@ PLAN_KEYWORDS: dict[str, str] = {
     "emp-ins-001": "EMP-INS-001"
 }
 
-GREETING_PATTERN = re.compile(
-    r"^(?:hello|hi|hey|greetings|howdy|good\s+(?:morning|afternoon|evening)|hi\s+there|hello\s+there)[!.,\s]*$",
+GREETING_CORE = r"(?:hello\b|hi\b|hey\b|howdy\b|greetings\b|hiya\b|good\s+(?:morning|afternoon|evening|day)\b)"
+COURTESY_CORE = r"(?:how(?:['’]?s|\s+is)\s+it\s+going\b|how\s+are\s+you(?:\s+doing)?\b|how\s+do\s+you\s+do\b|hope\s+you\s+are\s+(?:doing\s+)?well\b|what['’]?s\s+up\b)"
+ASSIST_CORE = r"(?:can\s+you\s+(?:please\s+)?help(?:\s+me)?(?:\s+please)?\b|could\s+you\s+(?:please\s+)?help(?:\s+me)?(?:\s+please)?\b|can\s+you\s+(?:please\s+)?assist(?:\s+me)?(?:\s+please)?\b|i\s+need\s+(?:some\s+)?help\b|need\s+(?:some\s+)?help\b|help\s+me(?:\s+please)?\b|are\s+you\s+there\b|what\s+can\s+you\s+do\b|who\s+are\s+you\b)"
+
+PURE_GREETING_PATTERN = re.compile(
+    rf"^\s*(?:{GREETING_CORE}(?:\s+there\b)?|{COURTESY_CORE}|{ASSIST_CORE})"
+    rf"(?:[\s,!.;:\-]+(?:{GREETING_CORE}(?:\s+there\b)?|{COURTESY_CORE}|{ASSIST_CORE}))*[\s!?.~]*$",
     re.IGNORECASE
 )
+
+GREETING_PREFIX_PATTERN = re.compile(
+    rf"^\s*({GREETING_CORE}(?:\s+there\b)?|{COURTESY_CORE}|{ASSIST_CORE})"
+    rf"(?:[\s,!.;:\-]+(?:{GREETING_CORE}(?:\s+there\b)?|{COURTESY_CORE}|{ASSIST_CORE}))*"
+    rf"[\s,!.;:\-]+",
+    re.IGNORECASE
+)
+
+GREETING_PATTERN = PURE_GREETING_PATTERN
 
 DISCLOSURE_PATTERNS = [
     re.compile(r"what\s+(is|are)\s+(the|your|its|all)\s+.*system\s+(prompt|instruction|directive|rule)s?", re.IGNORECASE),
@@ -104,10 +119,14 @@ class ScopeResolver:
             selected_plan_id = "HS-BASIC-001" if "HS-BASIC-001" in authorized_set else authorized_list[0]
 
         # 0. Check for Greeting query
-        if GREETING_PATTERN.match(q_lower):
+        if PURE_GREETING_PATTERN.match(q_lower):
             p_info = get_plan_by_id(selected_plan_id)
             p_name = p_info.plan_name if p_info else selected_plan_id
-            greeting_msg = f"Hello! I can help you understand the benefits, limits, waiting periods, and claim conditions described in {p_name}. What would you like to know?"
+            greeting_msg = (
+                f"Hello! I'm here to help you navigate your health insurance coverage. "
+                f"Under **{p_name}**, I can assist you with understanding your benefits, daily cash & ICU allowances, "
+                f"surgical tiers, waiting periods, or filing a claim. How can I assist you today?"
+            )
             return ScopeResolutionResult(
                 selected_plan_id=selected_plan_id,
                 authorized_plans=authorized_list,
@@ -118,6 +137,19 @@ class ScopeResolver:
                 is_greeting=True,
                 greeting_message=greeting_msg
             )
+
+        # 0.1 Check for Mixed Intent: Greeting Prefix with Substantive Insurance / Policy Query
+        # (e.g. "Hey there, can you explain my Gold plan?", "Good morning, what is the hospital cash benefit?")
+        greeting_prefix = None
+        cleaned_subquery = query
+        prefix_match = GREETING_PREFIX_PATTERN.match(query)
+        if prefix_match:
+            candidate_prefix = prefix_match.group(0).strip(" ,!.;:-")
+            candidate_remainder = query[prefix_match.end():].strip()
+            if candidate_remainder:
+                greeting_prefix = candidate_prefix
+                cleaned_subquery = candidate_remainder
+                q_lower = cleaned_subquery.lower()
 
         # 1. Check for System Prompt / Disclosure Request
         for pattern in DISCLOSURE_PATTERNS:
@@ -181,9 +213,9 @@ class ScopeResolver:
             logger.info(f"Mixed query detected. Insurance intent present alongside unrelated topic: {matched_oos_topic}")
             # Isolate insurance sub-query by stripping out-of-scope clause
             split_patterns = [r"\s+(?:and\s+also|and\s+who|and\s+what|also|as\s+well\s+as)\s+"]
-            insurance_part = query
+            insurance_part = cleaned_subquery
             for sp in split_patterns:
-                parts = re.split(sp, query, flags=re.IGNORECASE)
+                parts = re.split(sp, cleaned_subquery, flags=re.IGNORECASE)
                 if len(parts) > 1:
                     # Keep the part that contains insurance terms
                     for p in parts:
@@ -199,6 +231,7 @@ class ScopeResolver:
                 is_mixed=True,
                 mixed_insurance_query=insurance_part,
                 mixed_unrelated_topic=matched_oos_topic,
+                greeting_prefix=greeting_prefix,
                 resolved_query=insurance_part
             )
 
@@ -211,7 +244,12 @@ class ScopeResolver:
                 effective_scope=[selected_plan_id],
                 reason="out_of_scope",
                 is_out_of_scope=True,
-                refusal_message=f"I'm a health insurance assistant and can help with policy benefits, eligibility, claims, and related insurance questions. I can't answer questions about {matched_oos_topic} because they are outside my scope."
+                greeting_prefix=greeting_prefix,
+                refusal_message=(
+                    f"I'd love to help, but I'm a health insurance assistant and can help with policy benefits, eligibility, "
+                    f"claims, and related insurance questions. I can't answer questions about {matched_oos_topic} because they are outside my scope. "
+                    f"If you have any questions about your health insurance policy, please let me know!"
+                )
             )
 
         # Handle General Out-of-Scope Query with zero insurance context
@@ -227,7 +265,12 @@ class ScopeResolver:
                 effective_scope=[selected_plan_id],
                 reason="out_of_scope",
                 is_out_of_scope=True,
-                refusal_message="I'm a health insurance assistant and can help with policy benefits, eligibility, claims, and related insurance questions. I can't answer this question because it is outside my scope."
+                greeting_prefix=greeting_prefix,
+                refusal_message=(
+                    "I'd love to help, but I'm a health insurance assistant and can help with policy benefits, eligibility, "
+                    "claims, and related insurance questions. I can't answer this question because it is outside my scope. "
+                    "If you have any questions regarding your health insurance coverage, feel free to ask!"
+                )
             )
 
         # 3. Check for Ambiguous Comparisons
@@ -296,7 +339,10 @@ class ScopeResolver:
                     reason=reason,
                     is_comparison=True,
                     is_ambiguous=False,
-                    denied_plans=denied_plans
+                    denied_plans=denied_plans,
+                    greeting_prefix=greeting_prefix,
+                    mixed_insurance_query=cleaned_subquery if greeting_prefix else None,
+                    resolved_query=cleaned_subquery
                 )
 
         # If user explicitly asked ONLY for a different plan without a comparison trigger
@@ -310,7 +356,10 @@ class ScopeResolver:
                     reason="explicit_named_plan",
                     is_comparison=False,
                     is_ambiguous=False,
-                    denied_plans=denied_plans
+                    denied_plans=denied_plans,
+                    greeting_prefix=greeting_prefix,
+                    mixed_insurance_query=cleaned_subquery if greeting_prefix else None,
+                    resolved_query=cleaned_subquery
                 )
 
         # If customer asked solely for an employee plan
@@ -322,19 +371,22 @@ class ScopeResolver:
                 reason="access_restricted",
                 is_comparison=False,
                 is_ambiguous=False,
-                denied_plans=denied_plans
+                denied_plans=denied_plans,
+                greeting_prefix=greeting_prefix,
+                mixed_insurance_query=cleaned_subquery if greeting_prefix else None,
+                resolved_query=cleaned_subquery
             )
 
         # 6. Follow-up / Default Selected Plan Scope
         reason = "default_selected_plan"
-        resolved_q = query
+        resolved_q = cleaned_subquery
         if any(re.search(rf"\b{t}\b", q_lower) for t in follow_up_tokens):
             reason = "follow_up"
             if conversation_history:
                 last_turn = conversation_history[-1]
                 last_q = last_turn.get("user_query") or last_turn.get("query") or ""
                 if last_q and any(p in q_lower.split() for p in ["its", "it", "that", "those", "this", "there", "what", "how"]):
-                    resolved_q = f"{last_q} — {query}"
+                    resolved_q = f"{last_q} — {cleaned_subquery}"
 
         return ScopeResolutionResult(
             selected_plan_id=selected_plan_id,
@@ -344,5 +396,7 @@ class ScopeResolver:
             is_comparison=False,
             is_ambiguous=False,
             resolved_query=resolved_q,
+            greeting_prefix=greeting_prefix,
+            mixed_insurance_query=cleaned_subquery if greeting_prefix else None,
             denied_plans=denied_plans
         )
