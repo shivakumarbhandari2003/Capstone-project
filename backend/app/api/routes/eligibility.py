@@ -197,20 +197,7 @@ def select_plan_with_eligibility(
             detail=f"Plan '{payload.selected_plan_id}' is not in your qualified plans: {qualifying_plans}"
         )
 
-    active_selection = sqlite_db.get_active_plan_selection_for_user(current_user.user_id)
-    # If the user is re-selecting the exact plan that they already confirmed, preserve CONFIRMED status
-    if active_selection and active_selection.get("status") == "CONFIRMED" and active_selection.get("selected_plan_id") == payload.selected_plan_id:
-        plan_info = PLAN_REGISTRY.get(payload.selected_plan_id)
-        plan_name = plan_info.plan_name if plan_info else payload.selected_plan_id
-        return {
-            "selection_id": active_selection["selection_id"],
-            "selected_plan_id": payload.selected_plan_id,
-            "confirmed_plan_id": active_selection.get("selected_plan_id"),
-            "plan_name": plan_name,
-            "status": "CONFIRMED",
-            "confirmed_at": active_selection.get("confirmed_at"),
-            "assessment_id": active_selection.get("assessment_id")
-        }
+    # Plan selection starts in ACTIVE unconfirmed mode so the user can verify and confirm manually
 
     selection_id = sqlite_db.save_plan_selection(
         user_id=current_user.user_id,

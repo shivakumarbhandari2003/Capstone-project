@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 RAG_SYSTEM_PROMPT = """You are the AI Insurance Assistant. You provide clear, direct, and user-friendly answers. You adapt your formatting to the user's intent and the structural relationships in the retrieved information, while maintaining strict factual accuracy, role-based authorization, and transparent uncertainty handling.
 
@@ -216,7 +216,8 @@ def format_rag_prompt(
     selected_plan_name: str,
     role: str,
     is_comparison: bool = False,
-    conversation_history: Optional[list[dict]] = None
+    conversation_history: Optional[list[dict]] = None,
+    context_window: Optional[Any] = None
 ) -> str:
     comparison_directive = (
         "\nNote: The user requested an authorized plan comparison. Always present the comparison in a clear side-by-side Markdown table. Even if specific details are not defined in the document, use table columns and state 'Not defined in document' or 'Not specified' in the cells."
@@ -224,19 +225,19 @@ def format_rag_prompt(
     )
 
     history_block = ""
-    if conversation_history:
-        recent_turns = conversation_history[-3:]
-        turn_lines = []
-        for t in recent_turns:
-            uq = t.get("user_query") or t.get("query")
-            ans = t.get("assistant_answer") or t.get("answer")
-            if uq and ans:
-                # Sanitize any accidental delimiter tags from history
-                clean_uq = uq.replace("<", "&lt;").replace(">", "&gt;")
-                clean_ans = ans[:200].replace("<", "&lt;").replace(">", "&gt;")
-                turn_lines.append(f"User: {clean_uq}\nAssistant: {clean_ans}...")
-        if turn_lines:
-            history_block = "\n### RECENT CONVERSATION HISTORY (Untrusted Context):\n" + "\n\n".join(turn_lines) + "\n"
+    if context_window and getattr(context_window, "formatted_history_text", None):
+        history_block = (
+            "\n### RECENT CONVERSATION HISTORY (Bounded Context Window - Last 6 Messages):\n"
+            + context_window.formatted_history_text + "\n"
+        )
+    elif conversation_history:
+        from backend.app.services.context_window import ContextWindowManager
+        cw = ContextWindowManager.extract_context_window(conversation_history, max_messages=6, max_tokens=1200)
+        if cw.formatted_history_text:
+            history_block = (
+                "\n### RECENT CONVERSATION HISTORY (Bounded Context Window - Last 6 Messages):\n"
+                + cw.formatted_history_text + "\n"
+            )
 
     evidence_content = (
         context_text.strip()
@@ -267,6 +268,7 @@ Respond directly and concisely following the Universal Answer-Formatting Guideli
 - Adopt a warm, empathetic, and professional ChatGPT-style insurance agent tone. Acknowledge medical concerns briefly when appropriate, while keeping simple factual queries direct and friendly. Always format currency as 'Rs. ' instead of '₹'.
 - Choose the presentation format that requires the least effort to understand (table for related/comparable categories or values, calculation for derived numbers, numbered steps for procedures, bullets for lists).
 - If retrieved evidence contains related values, present them showing their direct relationship rather than scattering them.
+- Context-Aware Continuity: If the question relates to prior messages in the context window, ground the answer in the retrieved policy evidence and the conversational context, strictly adhering to whatever condition, duration, or criteria the user mentioned (e.g. "in simple words", "for five days", "under Gold", etc.). If the question is new or unrelated, answer directly as normal without unnecessary reference to previous turns.
 - If this is a follow-up question, answer the specific aspect directly without unnecessarily repeating the previous response.
 - If the user asks a verification or confirmation question (e.g., "Is it...", "Am I right?", "Is this correct?", "Is X covered?"), start directly with **"Yes, ..."** or **"No, ..."** (or **"Partially, ..."**) followed by a concise 1-2 sentence explanation.
 - If the user asks for a recommendation or which plan to choose based on criteria, act as an AI personal agent: provide a clear, structured recommendation with key matching benefits and trade-offs.

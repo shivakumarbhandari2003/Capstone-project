@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 const formatHighlight = (text) => {
   if (!text) return '';
   return text
-    .replace(/\u00e2\u201a\u00b9/g, '₹')
-    .replace(/\u00e2\u0082\u00b9/g, '₹')
-    .replace(/â‚¹/g, '₹')
-    .replace(/â¹/g, '₹')
-    .replace(/â\u0082¹/g, '₹')
-    .replace(/Ã¢â‚¬â„¢/g, '₹')
+    .replace(/[₹\u20B9]/g, 'Rs. ')
+    .replace(/\u00e2\u201a\u00b9/g, 'Rs. ')
+    .replace(/\u00e2\u0082\u00b9/g, 'Rs. ')
+    .replace(/â‚¹/g, 'Rs. ')
+    .replace(/â\u0082¹/g, 'Rs. ')
+    .replace(/Ã¢â‚¬â„¢/g, 'Rs. ')
     .replace(/â€“/g, '–')
-    .replace(/â€”/g, '—');
+    .replace(/â€”/g, '—')
+    .replace(/Rs\.\s*(\d)/g, 'Rs. $1');
 };
 
 export function PlanSelectionScreen({
@@ -472,13 +473,15 @@ export function PlanSelectionScreen({
                   disabled={submittingPlanId === p.plan_id}
                 >
                   {submittingPlanId === p.plan_id ? (
-                    <span>Opening Review & Chat...</span>
+                    <span>{userRole === 'employee' ? 'Opening Chatbot...' : 'Opening Review...'}</span>
                   ) : (
                     <>
                       <span>
                         {isConfirmed && p.plan_id === confirmedPlanId
                           ? 'View Confirmed Plan / Chat'
-                          : `Select ${p.display_title || 'Plan'}`}
+                          : userRole === 'employee'
+                          ? `Explore ${p.display_title || 'Plan'} / Chat`
+                          : `Review & Confirm ${p.display_title || 'Plan'}`}
                       </span>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12" />

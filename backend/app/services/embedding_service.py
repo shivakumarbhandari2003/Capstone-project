@@ -1,9 +1,14 @@
+import os
 import math
 from typing import Optional
 from backend.app.core.config import settings
 from backend.app.core.logging_config import logger
 
 import threading
+
+# Enforce offline cache usage to avoid network timeouts when loading local models
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 class LocalEmbeddingService:
     """Generates 384-dimensional dense vectors using local BAAI/bge-small-en-v1.5."""

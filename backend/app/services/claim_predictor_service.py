@@ -89,15 +89,15 @@ class ClaimPredictorService:
             bounded_prediction = max(0.0, raw_prediction)
 
             request_id = f"pred_{uuid.uuid4().hex[:12]}"
-            formatted_val = f"₹{bounded_prediction:,.2f}"
+            formatted_val = f"Rs. {bounded_prediction:,.2f}"
 
-            logger.info(f"[{request_id}] Claim prediction generated: {bounded_prediction:.2f} ({formatted_val})")
+            logger.info(f"[{request_id}] Claim prediction generated: {bounded_prediction:.2f} (Rs. {bounded_prediction:,.2f})")
 
             return {
                 "request_id": request_id,
                 "prediction": round(bounded_prediction, 2),
                 "formatted_prediction": formatted_val,
-                "output_units": "INR (₹)",
+                "output_units": "INR (Rs.)",
                 "validated_inputs": input_data.model_dump()
             }
         except Exception as e:

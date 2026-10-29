@@ -22,7 +22,7 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             "category": "Basic",
             "product_type": "Proposed Fixed-Benefit Health Insurance",
             "policy_term": "Illustrative 1 year",
-            "annual_premium": "₹5,500*",
+            "annual_premium": "Rs. 5,500*",
             "payment_frequency": "Annual only",
             "taxes": "Excluded*",
             "official_plan_number": "Not assigned",
@@ -36,74 +36,74 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             "hospital_cash": {
                 "title": "HOSPITAL CASH",
-                "daily_benefit": "₹2,000 / day",
+                "daily_benefit": "Rs. 2,000 / day",
                 "min_stay": "Min stay >24 hrs",
                 "max_days": "Maximum 10 days",
-                "max_amount": "Max ₹20,000",
+                "max_amount": "Max Rs. 20,000",
                 "status": "included"
             },
             "icu_benefit": {
                 "title": "ICU BENEFIT",
-                "daily_benefit": "₹4,000 / day",
+                "daily_benefit": "Rs. 4,000 / day",
                 "max_days": "Maximum 5 days",
-                "max_amount": "Max ₹20,000",
+                "max_amount": "Max Rs. 20,000",
                 "relationship": "Additional to hospital cash*",
                 "status": "included"
             },
             "surgery_benefit": {
                 "title": "MAJOR SURGERY",
-                "basis": "Basis: ₹2,00,000",
+                "basis": "Basis: Rs. 2,00,000",
                 "category_payouts": [
-                    "Cat. 1: ₹2,00,000",
-                    "Cat. 2: ₹1,20,000",
-                    "Cat. 3: ₹80,000",
-                    "Cat. 4: ₹40,000"
+                    "Cat. 1: Rs. 2,00,000",
+                    "Cat. 2: Rs. 1,20,000",
+                    "Cat. 3: Rs. 80,000",
+                    "Cat. 4: Rs. 40,000"
                 ],
-                "overall_max": "₹6,00,000*",
+                "overall_max": "Rs. 6,00,000*",
                 "status": "included"
             }
         },
         "other_benefits": [
             {
                 "name": "Day-care",
-                "amount": "₹10,000/procedure",
+                "amount": "Rs. 10,000/procedure",
                 "frequency": "Max 1 procedure/year",
-                "annual_limit": "Max ₹10,000/year",
+                "annual_limit": "Max Rs. 10,000/year",
                 "status": "included"
             },
             {
                 "name": "Other surgery",
-                "amount": "₹3,000/day",
+                "amount": "Rs. 3,000/day",
                 "frequency": "Max 5 days/year",
-                "annual_limit": "Max ₹15,000/year",
+                "annual_limit": "Max Rs. 15,000/year",
                 "status": "included"
             },
             {
                 "name": "Medical care",
-                "amount": "₹5,000/claim",
+                "amount": "Rs. 5,000/claim",
                 "frequency": "Max 1 claim/year",
-                "annual_limit": "Max ₹5,000/year",
+                "annual_limit": "Max Rs. 5,000/year",
                 "status": "included"
             },
             {
                 "name": "Extended stay",
-                "amount": "₹15,000",
+                "amount": "Rs. 15,000",
                 "frequency": "Hospitalization >30 days",
                 "annual_limit": "Max 1 claim/year",
                 "status": "included"
             },
             {
                 "name": "Health check",
-                "amount": "Up to ₹1,000/year",
+                "amount": "Up to Rs. 1,000/year",
                 "frequency": "Once per policy year",
-                "annual_limit": "₹1,000/year",
+                "annual_limit": "Rs. 1,000/year",
                 "status": "included"
             },
             {
                 "name": "Ambulance",
-                "amount": "Up to ₹250/event",
+                "amount": "Up to Rs. 250/event",
                 "frequency": "Max 1 claim/year",
-                "annual_limit": "₹250/year",
+                "annual_limit": "Rs. 250/year",
                 "status": "included"
             },
             {
@@ -122,7 +122,7 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             {
                 "name": "Optional riders",
-                "amount": "Premium waiver: ₹300/year* | Auto Health Cover: ₹500/year*",
+                "amount": "Premium waiver: Rs. 300/year* | Auto Health Cover: Rs. 500/year*",
                 "frequency": "Annual rider",
                 "annual_limit": "Not included in base premium",
                 "status": "optional_rider"
@@ -173,7 +173,7 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             "category": "Gold",
             "product_type": "Fixed-Benefit Health Insurance",
             "policy_term": "Illustrative 1 year",
-            "annual_premium": "₹11,800*",
+            "annual_premium": "Rs. 11,800*",
             "payment_frequency": "Annual",
             "taxes": "Excluded*",
             "official_plan_number": "Not assigned",
@@ -187,88 +187,88 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             "hospital_cash": {
                 "title": "HOSPITAL CASH",
-                "daily_benefit": "₹5,000 / day",
+                "daily_benefit": "Rs. 5,000 / day",
                 "min_stay": "Min stay >24 hrs",
                 "max_days": "Max 20 days",
-                "max_amount": "Max ₹1,00,000",
+                "max_amount": "Max Rs. 1,00,000",
                 "status": "included"
             },
             "icu_benefit": {
                 "title": "ICU BENEFIT",
-                "daily_benefit": "₹10,000 / day",
+                "daily_benefit": "Rs. 10,000 / day",
                 "max_days": "Max 10 days",
-                "max_amount": "Max ₹1,00,000",
+                "max_amount": "Max Rs. 1,00,000",
                 "relationship": "ICU and hospital cash combination subject to terms*",
                 "status": "included"
             },
             "surgery_benefit": {
                 "title": "MAJOR SURGERY",
-                "basis": "Basis: ₹5,00,000",
+                "basis": "Basis: Rs. 5,00,000",
                 "category_payouts": [
-                    "Cat. 1: ₹5,00,000",
-                    "Cat. 2: ₹3,00,000",
-                    "Cat. 3: ₹2,00,000",
-                    "Cat. 4: ₹1,00,000"
+                    "Cat. 1: Rs. 5,00,000",
+                    "Cat. 2: Rs. 3,00,000",
+                    "Cat. 3: Rs. 2,00,000",
+                    "Cat. 4: Rs. 1,00,000"
                 ],
-                "overall_max": "₹25,00,000*",
+                "overall_max": "Rs. 25,00,000*",
                 "status": "included"
             }
         },
         "other_benefits": [
             {
                 "name": "Day-care",
-                "amount": "₹25,000/procedure",
+                "amount": "Rs. 25,000/procedure",
                 "frequency": "Max 2 claims/year",
-                "annual_limit": "Max ₹50,000/year",
+                "annual_limit": "Max Rs. 50,000/year",
                 "status": "included"
             },
             {
                 "name": "Other surgery",
-                "amount": "₹10,000/day",
+                "amount": "Rs. 10,000/day",
                 "frequency": "Max 10 days/year",
-                "annual_limit": "Max ₹1,00,000/year",
+                "annual_limit": "Max Rs. 1,00,000/year",
                 "status": "included"
             },
             {
                 "name": "Medical care",
-                "amount": "₹15,000/claim",
+                "amount": "Rs. 15,000/claim",
                 "frequency": "Max 2 claims/year",
-                "annual_limit": "Max ₹30,000/year",
+                "annual_limit": "Max Rs. 30,000/year",
                 "status": "included"
             },
             {
                 "name": "Extended stay",
-                "amount": "₹50,000",
+                "amount": "Rs. 50,000",
                 "frequency": "Hospitalization >30 days",
                 "annual_limit": "Max 1 claim/year",
                 "status": "included"
             },
             {
                 "name": "Health check",
-                "amount": "Up to ₹3,000/year",
+                "amount": "Up to Rs. 3,000/year",
                 "frequency": "Once per policy year",
-                "annual_limit": "₹3,000/year",
+                "annual_limit": "Rs. 3,000/year",
                 "status": "included"
             },
             {
                 "name": "Ambulance",
-                "amount": "₹500/trip",
+                "amount": "Rs. 500/trip",
                 "frequency": "Max 2 trips/year",
-                "annual_limit": "₹1,000/year",
+                "annual_limit": "Rs. 1,000/year",
                 "status": "included"
             },
             {
                 "name": "Restored cover",
-                "amount": "Up to ₹5,00,000*",
+                "amount": "Up to Rs. 5,00,000*",
                 "frequency": "Once per policy year",
-                "annual_limit": "₹5,00,000",
+                "annual_limit": "Rs. 5,00,000",
                 "status": "included"
             },
             {
                 "name": "Quick cash",
-                "amount": "Up to 25% of eligible surgery benefit; capped at ₹50,000*",
+                "amount": "Up to 25% of eligible surgery benefit; capped at Rs. 50,000*",
                 "frequency": "Per eligible claim",
-                "annual_limit": "₹50,000",
+                "annual_limit": "Rs. 50,000",
                 "status": "included"
             }
         ],
@@ -318,7 +318,7 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             "category": "Premium",
             "product_type": "Fixed-Benefit Health Insurance",
             "policy_term": "Illustrative 1 year",
-            "annual_premium": "₹22,500*",
+            "annual_premium": "Rs. 22,500*",
             "payment_frequency": "Annual",
             "taxes": "Excluded*",
             "official_plan_number": "Not assigned",
@@ -332,25 +332,25 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             "hospital_cash": {
                 "title": "HOSPITAL CASH",
-                "daily_benefit": "₹10,000 / day",
+                "daily_benefit": "Rs. 10,000 / day",
                 "min_stay": "Not specified in provided plan document",
                 "max_days": "Max 30 days",
-                "max_amount": "Max ₹3,00,000",
+                "max_amount": "Max Rs. 3,00,000",
                 "status": "included"
             },
             "icu_benefit": {
                 "title": "ICU BENEFIT",
-                "daily_benefit": "₹20,000 / day",
+                "daily_benefit": "Rs. 20,000 / day",
                 "max_days": "Max 15 days",
-                "max_amount": "Max ₹3,00,000",
+                "max_amount": "Max Rs. 3,00,000",
                 "relationship": "ICU replaces hospital cash",
                 "status": "included"
             },
             "surgery_benefit": {
                 "title": "MAJOR SURGERY",
-                "basis": "Basis: ₹10,00,000",
+                "basis": "Basis: Rs. 10,00,000",
                 "category_payouts": [
-                    "₹10L / ₹6L / ₹4L / ₹2L"
+                    "Rs. 10L / Rs. 6L / Rs. 4L / Rs. 2L"
                 ],
                 "overall_max": "Not specified in source document",
                 "status": "included"
@@ -359,42 +359,42 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
         "other_benefits": [
             {
                 "name": "Day-care",
-                "amount": "₹50,000/procedure",
+                "amount": "Rs. 50,000/procedure",
                 "frequency": "Max 3 claims/year",
-                "annual_limit": "Max ₹1,50,000/year",
+                "annual_limit": "Max Rs. 1,50,000/year",
                 "status": "included"
             },
             {
                 "name": "Other surgery",
-                "amount": "₹25,000/day",
+                "amount": "Rs. 25,000/day",
                 "frequency": "Max 15 days/year",
-                "annual_limit": "Max ₹3,75,000/year",
+                "annual_limit": "Max Rs. 3,75,000/year",
                 "status": "included"
             },
             {
                 "name": "Medical care",
-                "amount": "₹25,000/claim",
+                "amount": "Rs. 25,000/claim",
                 "frequency": "Max 3 claims/year",
-                "annual_limit": "Max ₹75,000/year",
+                "annual_limit": "Max Rs. 75,000/year",
                 "status": "included"
             },
             {
                 "name": "Extended stay",
-                "amount": "₹1,00,000",
+                "amount": "Rs. 1,00,000",
                 "frequency": "Hospitalization >30 days",
                 "annual_limit": "Not specified in provided plan document",
                 "status": "included"
             },
             {
                 "name": "Health check",
-                "amount": "Up to ₹5,00,0/year",
+                "amount": "Up to Rs. 5,00,0/year",
                 "frequency": "Once per policy year",
-                "annual_limit": "Up to ₹5,000/year",
+                "annual_limit": "Up to Rs. 5,000/year",
                 "status": "included"
             },
             {
                 "name": "Ambulance",
-                "amount": "₹1,000/claim",
+                "amount": "Rs. 1,000/claim",
                 "frequency": "Per claim",
                 "annual_limit": "Not specified in provided plan document",
                 "status": "included"
@@ -455,9 +455,9 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             "category": "Employee Exclusive",
             "product_type": "Fixed-Benefit Health Insurance",
             "policy_term": "1 Year",
-            "annual_premium": "₹5,000",
-            "employer_pays": "₹2,000",
-            "employee_pays": "₹3,000",
+            "annual_premium": "Rs. 5,000",
+            "employer_pays": "Rs. 2,000",
+            "employee_pays": "Rs. 3,000",
             "payment_frequency": "Annual (default)",
             "taxes": "Not defined",
             "official_plan_number": "Not assigned in the document",
@@ -467,13 +467,13 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             "annual_coverage": {
                 "title": "ANNUAL COVERAGE",
                 "overall_limit": "Not defined",
-                "major_surgery_basis": "₹10,00,000",
-                "major_surgery_max": "₹1,00,00,000* (10× benefit basis)",
+                "major_surgery_basis": "Rs. 10,00,000",
+                "major_surgery_max": "Rs. 1,00,00,000* (10× benefit basis)",
                 "status": "not_specified"
             },
             "hospital_cash": {
                 "title": "HOSPITAL CASH",
-                "daily_benefit": "₹10,000",
+                "daily_benefit": "Rs. 10,000",
                 "min_stay": "More than 24 hours",
                 "max_days": "First Year: Max 30 days | Later Years: Max 90 days/year",
                 "max_amount": "Overall Maximum: 900 days*",
@@ -481,7 +481,7 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             "icu_benefit": {
                 "title": "ICU BENEFIT",
-                "daily_benefit": "₹20,000",
+                "daily_benefit": "Rs. 20,000",
                 "max_days": "Maximum ICU days not specified in document",
                 "max_amount": "Overall ICU limit: Not defined",
                 "relationship": "Hospital Cash Combo: Subject to policy terms",
@@ -489,25 +489,25 @@ CANONICAL_PLAN_REVIEW_DATA: Dict[str, Dict[str, Any]] = {
             },
             "surgery_benefit": {
                 "title": "MAJOR SURGERY BENEFIT",
-                "basis": "Benefit Basis: ₹10,00,000",
+                "basis": "Benefit Basis: Rs. 10,00,000",
                 "category_payouts": [
-                    "Cat. 1 (100%): ₹10,00,000",
-                    "Cat. 2 (60%): ₹6,00,000",
-                    "Cat. 3 (40%): ₹4,00,000",
-                    "Cat. 4 (20%): ₹2,00,000"
+                    "Cat. 1 (100%): Rs. 10,00,000",
+                    "Cat. 2 (60%): Rs. 6,00,000",
+                    "Cat. 3 (40%): Rs. 4,00,000",
+                    "Cat. 4 (20%): Rs. 2,00,000"
                 ],
-                "overall_max": "₹1,00,00,000* (Up to 10× benefit basis)",
+                "overall_max": "Rs. 1,00,00,000* (Up to 10× benefit basis)",
                 "status": "included"
             }
         },
         "other_benefits": [
-            { "name": "Day-Care Procedure", "amount": "₹50,000/procedure", "frequency": "Max 3 procedures/year", "annual_limit": "Overall: 30 procedures*", "status": "included" },
-            { "name": "Other Surgery", "amount": "₹25,000/day", "frequency": "Min stay >24 hrs • First Year: Max 15 days | Later: Max 45 days/year", "annual_limit": "Overall Maximum: 450 days*", "status": "included" },
-            { "name": "Medical Management", "amount": "₹25,000/eligible claim", "frequency": "Max 2 claims/year", "annual_limit": "Overall Claims: 20*", "status": "included" },
-            { "name": "Extended Hospital Stay", "amount": "₹1,00,000 lump sum", "frequency": "Qualifying Stay >30 continuous days", "annual_limit": "Max 1 claim/year; 10 overall*", "status": "included" },
-            { "name": "Health Check-Up", "amount": "₹5,000 reimbursement", "frequency": "Available after 3 years of cover*", "annual_limit": "Subsequent: 3 years after previous check-up", "status": "included" },
-            { "name": "Restored Cover", "amount": "Not confirmed for employee plan (Reference: Up to ₹10,00,000*)", "frequency": "N/A", "annual_limit": "N/A", "status": "not_included" },
-            { "name": "Ambulance", "amount": "₹1,000 illustrative (availability and claim limit not confirmed)", "frequency": "Illustrative", "annual_limit": "Not confirmed", "status": "not_included" },
+            { "name": "Day-Care Procedure", "amount": "Rs. 50,000/procedure", "frequency": "Max 3 procedures/year", "annual_limit": "Overall: 30 procedures*", "status": "included" },
+            { "name": "Other Surgery", "amount": "Rs. 25,000/day", "frequency": "Min stay >24 hrs • First Year: Max 15 days | Later: Max 45 days/year", "annual_limit": "Overall Maximum: 450 days*", "status": "included" },
+            { "name": "Medical Management", "amount": "Rs. 25,000/eligible claim", "frequency": "Max 2 claims/year", "annual_limit": "Overall Claims: 20*", "status": "included" },
+            { "name": "Extended Hospital Stay", "amount": "Rs. 1,00,000 lump sum", "frequency": "Qualifying Stay >30 continuous days", "annual_limit": "Max 1 claim/year; 10 overall*", "status": "included" },
+            { "name": "Health Check-Up", "amount": "Rs. 5,000 reimbursement", "frequency": "Available after 3 years of cover*", "annual_limit": "Subsequent: 3 years after previous check-up", "status": "included" },
+            { "name": "Restored Cover", "amount": "Not confirmed for employee plan (Reference: Up to Rs. 10,00,000*)", "frequency": "N/A", "annual_limit": "N/A", "status": "not_included" },
+            { "name": "Ambulance", "amount": "Rs. 1,000 illustrative (availability and claim limit not confirmed)", "frequency": "Illustrative", "annual_limit": "Not confirmed", "status": "not_included" },
             { "name": "Quick Cash", "amount": "Not confirmed (reference describes 50% advance for eligible surgery)", "frequency": "N/A", "annual_limit": "N/A", "status": "not_included" },
             { "name": "Claim-Free Increase", "amount": "Not confirmed (no increase calculation permitted without approved rules)", "frequency": "N/A", "annual_limit": "N/A", "status": "not_included" },
             { "name": "Premium Waiver & Auto Health Cover", "amount": "Availability and conditions not defined", "frequency": "N/A", "annual_limit": "N/A", "status": "not_included" }

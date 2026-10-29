@@ -15,12 +15,15 @@ function renderInline(text) {
   if (!text) return null;
 
   // Split by inline markdown tokens: `code`, **bold**, *italic*, [link](url)
-  const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g;
+  const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|<br\s*\/?>)/g;
   const parts = text.split(regex);
 
   return parts.map((part, index) => {
     if (!part) return null;
 
+    if (part === '<br>' || part === '<br/>' || part === '<br />') {
+      return <br key={index} />;
+    }
     if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
       return (
         <code key={index} className="chat-inline-code">
@@ -112,8 +115,11 @@ function cleanFormulasAndLatex(text) {
   // Fractions: \frac{a}{b} -> (a / b)
   cleaned = cleaned.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)');
 
-  // Replace Rupee symbol ₹ or unicode \u20B9 with Rs.
-  cleaned = cleaned.replace(/[\u20B9]\s*/g, 'Rs. ');
+  // Always format currency as 'Rs. ' instead of rupee symbol
+  cleaned = cleaned.replace(/[\u20B9₹]\s*/g, 'Rs. ');
+
+  // Remove private-use unicode font bullet glyphs (e.g. \uf0b7, \uf0a7, ) from Word/PDF imports
+  cleaned = cleaned.replace(/[\uf000-\uf0ff]/g, '');
 
   return cleaned;
 }
@@ -132,6 +138,13 @@ export default function MarkdownContent({ content }) {
 
     // 1. Skip empty lines
     if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Horizontal rule (--- or ---...--- or ------------------------------------------------------------)
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      elements.push(<hr key={`hr-${i}`} className="chat-divider" />);
       i++;
       continue;
     }
@@ -234,7 +247,10 @@ export default function MarkdownContent({ content }) {
     if (/^[\*\-]\s+/.test(trimmed)) {
       const listItems = [];
       while (i < lines.length && /^[\*\-]\s+/.test(lines[i].trim())) {
-        listItems.push(lines[i].trim().replace(/^[\*\-]\s+/, ''));
+        const itemText = lines[i].trim()
+          .replace(/^[\*\-]\s+/, '')
+          .replace(/^[\u2022\u25cf\u25aa\u25cb\u2023\u2043\u2219•▪▫▶►\s]+/, '');
+        listItems.push(itemText);
         i++;
       }
       elements.push(

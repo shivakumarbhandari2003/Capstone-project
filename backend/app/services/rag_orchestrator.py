@@ -164,7 +164,12 @@ class RAGOrchestrator:
 
         # 3. Execute Hybrid Retrieval with contextualized resolved query
         t_start = time.time()
-        search_query = scope_result.mixed_insurance_query or scope_result.resolved_query or query
+        search_query = (
+            scope_result.search_query or
+            scope_result.mixed_insurance_query or
+            scope_result.resolved_query or
+            query
+        )
         t_ret_start = time.time()
         retrieval_res = self.retrieval_service.retrieve(
             query=search_query,
@@ -174,10 +179,14 @@ class RAGOrchestrator:
         )
         t_retrieval_ms = (time.time() - t_ret_start) * 1000.0
 
-        # 4. Generate Grounded Answer with Citations using sanitized query
+        # 4. Generate Grounded Answer with Citations using contextualized query
         history_list = [m.model_dump() for m in session.messages]
         t_gen_start = time.time()
-        generation_query = scope_result.mixed_insurance_query or sanitized_query
+        generation_query = (
+            (scope_result.resolved_query if scope_result.reason == "follow_up" and scope_result.resolved_query else None) or
+            scope_result.mixed_insurance_query or
+            sanitized_query
+        )
         target_plan_id = scope_result.effective_scope[0] if (scope_result.effective_scope and len(scope_result.effective_scope) == 1) else session.selected_plan_id
         answer_res = self.generation_service.generate_answer(
             query=generation_query,
@@ -186,7 +195,8 @@ class RAGOrchestrator:
             retrieval_result=retrieval_res,
             is_comparison=scope_result.is_comparison,
             denied_plans=scope_result.denied_plans,
-            conversation_history=history_list
+            conversation_history=history_list,
+            context_window=scope_result.context_window
         )
         t_generation_ms = (time.time() - t_gen_start) * 1000.0
         t_total_ms = (time.time() - t_start) * 1000.0
@@ -225,7 +235,8 @@ class RAGOrchestrator:
             query=sanitized_query,
             answer_text=final_answer_text,
             plan_id=session.selected_plan_id,
-            role=user.role
+            role=user.role,
+            conversation_history=history_list
         )
 
         # 5. Persist turn to conversation session
@@ -303,15 +314,42 @@ class RAGOrchestrator:
 
         logger.info(f"[{conversation_id}] Processing Claim Prediction RAG turn for user '{user.user_id}', target plan '{target_plan_id}'")
 
-        # Format concise NLP output without heavy RAG retrieval overhead per user requirement
-        pred_val = prediction_result.get("formatted_prediction") or f"₹{prediction_result.get('prediction', 0):,.2f}"
+        pred_raw = prediction_result.get("prediction", 0)
+        try:
+            pred_float = float(pred_raw)
+            formatted_payout = f"{pred_float:,.2f}"
+        except Exception:
+            formatted_payout = str(pred_raw)
+
         claim_type = inputs.get('claim_type', 'Major surgery')
         plan = inputs.get('plan', 'Gold')
         plan_name = f"Health Shield – {plan}"
+        age = inputs.get('age', 45)
+        days_hosp = inputs.get('days_hospitalised', 4)
+        icu_days = inputs.get('icu_days', 1)
+        proc_claimed = inputs.get('procedures_claimed', 2)
+        prior_claims = inputs.get('prior_daycare_claims_year', 0)
+        ext_flag = int(inputs.get('extended_stay_flag', 0) or 0)
+        extended_stay_str = "Yes (≥ 8 days)" if ext_flag == 1 else "No (< 8 days, if No)"
+        pre_ex = str(inputs.get('pre_existing', 'no')).strip().lower()
+        pre_existing_str = "Yes (Declared)" if pre_ex == 'yes' else "No (None declared)"
 
         assistant_answer = (
-            f"Based on the provided criteria, the machine learning model estimates a claim payout of approximately "
-            f"{pred_val} for {claim_type} under {plan_name}."
+            f"### ESTIMATED CLAIM PAYOUT\n"
+            f"# Rs. {formatted_payout}\n"
+            f"*ML-Generated Estimate | {claim_type}*\n\n"
+            f"---\n\n"
+            f"### CLAIM ASSESSMENT DETAILS\n\n"
+            f"| Policyholder Age | Days Hospitalised | ICU Days |\n"
+            f"| :--- | :--- | :--- |\n"
+            f"| **{age}** years | **{days_hosp}** days | **{icu_days}** days |\n\n"
+            f"| Procedures Claimed | Prior Daycare Claims | Plan Type |\n"
+            f"| :--- | :--- | :--- |\n"
+            f"| **{proc_claimed}** procedures | **{prior_claims}** procedures | **{plan_name}** |\n\n"
+            f"| Claim Type | Extended Stay | Pre-existing |\n"
+            f"| :--- | :--- | :--- |\n"
+            f"| **{claim_type}** | **{extended_stay_str}** | **{pre_existing_str}** |\n\n"
+            f"> **Note:** Please verify original documents/policies/rules before reimbursement."
         )
 
         t_total_ms = (time.time() - t_start) * 1000.0

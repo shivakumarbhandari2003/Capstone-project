@@ -33,6 +33,7 @@ class IngestionJob:
         self.end_time: Optional[float] = None
         self.total_duration_sec: float = 0.0
         self.content_hash: str = ""
+        self.file_size_bytes: int = 0
         self.is_duplicate: bool = False
         
         # Metrics
@@ -111,6 +112,7 @@ class IngestionOrchestrator:
             if not file_bytes:
                 raise ValueError("Source PDF file is empty (0 bytes).")
                 
+            job.file_size_bytes = len(file_bytes)
             job.content_hash = compute_sha256(file_bytes)
             
             # Check for duplicate unchanged upload

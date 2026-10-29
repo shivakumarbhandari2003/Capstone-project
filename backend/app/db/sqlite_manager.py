@@ -1394,7 +1394,7 @@ class SQLiteManager:
         now = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE plan_selections SET status = 'SWITCHED', updated_at = ? WHERE user_id = ? AND status = 'ACTIVE'", (now, user_id))
+            cur.execute("UPDATE plan_selections SET status = 'SWITCHED', updated_at = ? WHERE user_id = ? AND status IN ('ACTIVE', 'CONFIRMED')", (now, user_id))
             cur.execute("""
                 INSERT INTO plan_selections (
                     selection_id, user_id, assessment_id, selected_plan_id, status, created_at, updated_at

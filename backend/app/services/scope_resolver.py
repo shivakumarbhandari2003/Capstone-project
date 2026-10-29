@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from backend.app.services.auth_service import AuthorizationService, EMPLOYEE_ONLY_PLANS
 from backend.app.registry.plans import get_plan_by_id
 from backend.app.core.logging_config import logger
+from backend.app.services.context_window import ContextWindowManager, ContextWindowResult
 
 class ScopeResolutionResult(BaseModel):
     selected_plan_id: str
@@ -23,7 +24,10 @@ class ScopeResolutionResult(BaseModel):
     greeting_prefix: Optional[str] = None
     clarification_prompt: Optional[str] = None
     resolved_query: Optional[str] = None
+    search_query: Optional[str] = None
     denied_plans: list[str] = Field(default_factory=list)
+    context_window: Optional[ContextWindowResult] = None
+    is_context_related: bool = False
 
 PLAN_KEYWORDS: dict[str, str] = {
     "basic": "HS-BASIC-001",
@@ -110,6 +114,13 @@ class ScopeResolver:
         role: str,
         conversation_history: Optional[list[dict]] = None
     ) -> ScopeResolutionResult:
+        # Extract bounded 6-message context window first (sub-millisecond in-memory)
+        context_win = ContextWindowManager.extract_context_window(
+            conversation_history or [],
+            max_messages=6,
+            max_tokens=1200
+        )
+
         q_lower = query.lower().strip()
         authorized_set = AuthorizationService.get_authorized_plans(role)
         authorized_list = sorted(list(authorized_set))
@@ -135,7 +146,8 @@ class ScopeResolver:
                 is_comparison=False,
                 is_ambiguous=False,
                 is_greeting=True,
-                greeting_message=greeting_msg
+                greeting_message=greeting_msg,
+                context_window=context_win
             )
 
         # 0.1 Check for Mixed Intent: Greeting Prefix with Substantive Insurance / Policy Query
@@ -161,7 +173,8 @@ class ScopeResolver:
                     effective_scope=[selected_plan_id],
                     reason="disclosure_request",
                     is_disclosure_request=True,
-                    refusal_message="I cannot disclose internal system instructions, configuration directives, or private prompts. I am an AI Health Insurance Assistant designed to help you understand health insurance policy benefits, claims, waiting periods, and eligibility."
+                    refusal_message="I cannot disclose internal system instructions, configuration directives, or private prompts. I am an AI Health Insurance Assistant designed to help you understand health insurance policy benefits, claims, waiting periods, and eligibility.",
+                    context_window=context_win
                 )
 
         # 2. Check for Out-of-Scope and Mixed Queries
@@ -202,10 +215,16 @@ class ScopeResolver:
                 detected_plans.add("HS-PREMIUM-001")
             has_insurance_intent = True
 
-        # Check follow-up context if pronouns used
-        follow_up_tokens = ["its", "it", "that", "those", "this", "these", "does it", "is there", "what about", "is it covered", "how much is covered"]
+        # Check follow-up context using 6-message context window
+        follow_up_tokens = [
+            "its", "it", "that", "those", "this", "these", "does it", "is there",
+            "what about", "is it covered", "how much is covered", "the above",
+            "the above table", "above table", "this table", "the table", "above data",
+            "the above data", "in simple words", "in simple terms", "simplify", "break down"
+        ]
         has_followup_pronouns = any(re.search(rf"\b{re.escape(t)}\b", q_lower) for t in follow_up_tokens)
-        if conversation_history and has_followup_pronouns:
+        is_related_to_context = ContextWindowManager.is_query_related(cleaned_subquery, context_win)
+        if (conversation_history or context_win.selected_turns) and (has_followup_pronouns or is_related_to_context):
             has_insurance_intent = True
 
         # Handle Mixed Query (Insurance Question + Unrelated Question)
@@ -249,7 +268,8 @@ class ScopeResolver:
                     f"I'd love to help, but I'm a health insurance assistant and can help with policy benefits, eligibility, "
                     f"claims, and related insurance questions. I can't answer questions about {matched_oos_topic} because they are outside my scope. "
                     f"If you have any questions about your health insurance policy, please let me know!"
-                )
+                ),
+                context_window=context_win
             )
 
         # Handle General Out-of-Scope Query with zero insurance context
@@ -270,7 +290,8 @@ class ScopeResolver:
                     "I'd love to help, but I'm a health insurance assistant and can help with policy benefits, eligibility, "
                     "claims, and related insurance questions. I can't answer this question because it is outside my scope. "
                     "If you have any questions regarding your health insurance coverage, feel free to ask!"
-                )
+                ),
+                context_window=context_win
             )
 
         # 3. Check for Ambiguous Comparisons
@@ -377,16 +398,91 @@ class ScopeResolver:
                 resolved_query=cleaned_subquery
             )
 
-        # 6. Follow-up / Default Selected Plan Scope
+        # 6. Optimized 6-Message Context-Aware Follow-up & Default Selected Plan Scope
+        p_info = get_plan_by_id(selected_plan_id)
+        p_name = p_info.plan_name if p_info else selected_plan_id
         reason = "default_selected_plan"
         resolved_q = cleaned_subquery
-        if any(re.search(rf"\b{t}\b", q_lower) for t in follow_up_tokens):
+        search_q = cleaned_subquery
+        is_related = ContextWindowManager.is_query_related(cleaned_subquery, context_win)
+
+        immediate_turn = context_win.selected_turns[-1] if context_win.selected_turns else None
+        immediate_benefits = immediate_turn.mentioned_benefits if immediate_turn else []
+        all_benefits = context_win.discussed_benefits
+        last_uq = context_win.last_user_query or ""
+        last_ans = (context_win.last_assistant_answer or "").lower()
+
+        # Word to integer mapping for duration queries
+        word_to_num = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30
+        }
+
+        # 6.1 Duration / Calculation Follow-Up (e.g. "What about 5 days?", "Calculate for 10 days")
+        duration_m = re.search(
+            r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty)\s+days?\b",
+            q_lower
+        )
+        if is_related and duration_m and any(term in q_lower for term in ["what about", "how much", "for", "calculate", "cost", "payout"]):
+            val_str = duration_m.group(1).lower()
+            num_days = int(val_str) if val_str.isdigit() else word_to_num.get(val_str, 5)
+            target_b = "Hospital Cash"
+            if "icu" in q_lower or (immediate_benefits and "icu benefit" in immediate_benefits):
+                target_b = "ICU Benefit"
+            elif immediate_benefits and "hospital cash" in immediate_benefits:
+                target_b = "Hospital Cash"
+            elif all_benefits:
+                target_b = all_benefits[0].title()
+
             reason = "follow_up"
-            if conversation_history:
-                last_turn = conversation_history[-1]
-                last_q = last_turn.get("user_query") or last_turn.get("query") or ""
-                if last_q and any(p in q_lower.split() for p in ["its", "it", "that", "those", "this", "there", "what", "how"]):
-                    resolved_q = f"{last_q} — {cleaned_subquery}"
+            resolved_q = f"Calculate the {target_b} payout under {p_name} for {num_days} days of hospitalization."
+            search_q = f"{p_name} {target_b} daily benefit allowance rate maximum payable days cap per policy year inpatient"
+
+        # 6.2 Plain-Language Explanation & Table Breakdown Follow-Up
+        # (e.g. "Explain the above table in simple words", "Simplify this table", "What does this mean?")
+        elif is_related and (
+            re.search(r"\b(?:the\s+above\s+table|above\s+table|this\s+table|the\s+table|the\s+above\s+data|above\s+data|the\s+above)\b", q_lower) or
+            re.search(r"\b(?:explain|simplify|break\s+down|clarify|what\s+does\s+(?:this|it|the\s+above)\s+mean|in\s+simple\s+(?:words|terms)|simply)\b", q_lower)
+        ):
+            reason = "follow_up"
+            if any("surg" in b for b in immediate_benefits + all_benefits) or "surgery" in last_ans or "major surgery" in last_uq.lower() or "category 1" in last_ans:
+                resolved_q = f"Explain the Major Surgery Benefit categories, payout rules, and conditions for {p_name} in simple words."
+                search_q = f"{p_name} Section 5 Major Surgery Benefit basis category 1 2 3 4 payout percentage limits conditions inpatient"
+            elif any("cash" in b or "icu" in b for b in immediate_benefits + all_benefits) or "hospital cash" in last_ans or "icu" in last_ans:
+                resolved_q = f"Explain the Hospital Cash and ICU daily allowances, duration limits, and conditions for {p_name} in simple words."
+                search_q = f"{p_name} Sections 3 4 Hospital Cash ICU daily benefit limits inpatient 24 hours"
+            elif any("wait" in b for b in immediate_benefits + all_benefits) or "waiting" in last_ans:
+                resolved_q = f"Explain the waiting periods and exclusions for {p_name} in simple words."
+                search_q = f"{p_name} Section 15 waiting periods initial 30 days specific conditions 24 months pre-existing 36 months"
+            elif any("day-care" in b for b in immediate_benefits + all_benefits) or "day-care" in last_ans:
+                resolved_q = f"Explain the Day-Care procedure benefit for {p_name} in simple words."
+                search_q = f"{p_name} Section 6 Day-Care procedure benefit payout limits 24 hours"
+            elif last_uq:
+                resolved_q = f"Explain the policy details discussed previously ({last_uq}) for {p_name} in simple words."
+                search_q = f"{p_name} {last_uq}"
+
+        # 6.3 Coreference Pronouns ("its", "it", "that", "this")
+        elif is_related and any(re.search(rf"\b{t}\b", q_lower) for t in ["its", "it", "that", "this", "these", "those"]):
+            reason = "follow_up"
+            if "waiting period" in q_lower or "waiting" in q_lower:
+                resolved_q = f"What are the waiting periods under {p_name}?"
+                search_q = f"{p_name} waiting period initial 30 days specific diseases pre-existing illnesses exclusions"
+            elif last_uq:
+                resolved_q = f"{last_uq} — {cleaned_subquery}"
+                search_q = resolved_q
+
+        # 6.4 Generic Limit / Sub-limit Follow-ups (e.g. "What is the maximum limit?", "Is there a cap?")
+        elif is_related and re.search(r"^\s*(?:what\s+is\s+(?:the\s+|its\s+)?(?:maximum|max|cap|limit)|is\s+there\s+a\s+(?:cap|limit|maximum)|what\s+are\s+the\s+limits)[\s?.!]*$", q_lower):
+            target_b = all_benefits[0].title() if all_benefits else "Major Surgery Benefit"
+            reason = "follow_up"
+            resolved_q = f"What is the maximum limit and financial cap for {target_b} under {p_name}?"
+            search_q = f"{p_name} {target_b} maximum limit financial cap category tiers basis amount"
+
+        elif is_related and last_uq:
+            reason = "follow_up"
+            resolved_q = f"{last_uq} — {cleaned_subquery}"
+            search_q = resolved_q
 
         return ScopeResolutionResult(
             selected_plan_id=selected_plan_id,
@@ -396,7 +492,10 @@ class ScopeResolver:
             is_comparison=False,
             is_ambiguous=False,
             resolved_query=resolved_q,
+            search_query=search_q,
             greeting_prefix=greeting_prefix,
             mixed_insurance_query=cleaned_subquery if greeting_prefix else None,
-            denied_plans=denied_plans
+            denied_plans=denied_plans,
+            context_window=context_win,
+            is_context_related=(reason == "follow_up")
         )

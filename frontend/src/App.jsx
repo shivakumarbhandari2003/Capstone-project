@@ -36,6 +36,9 @@ export function App() {
   const [userMessageCount, setUserMessageCount] = useState(0);
   const [isClaimPredictorOpen, setIsClaimPredictorOpen] = useState(false);
 
+  const userRole = currentUser?.role || 'customer';
+  const isAdmin = userRole === 'admin';
+
   // Restore authenticated session and active navigation stage on page refresh
   useEffect(() => {
     async function restoreSession() {
@@ -64,10 +67,7 @@ export function App() {
                 if (isEligible) {
                   const activeSel = eligData.active_plan_selection;
                   const isConfirmed = Boolean(
-                    user.is_confirmed ||
-                    user.confirmation_status === 'CONFIRMED' ||
-                    user.confirmed_plan_id ||
-                    activeSel?.status === 'CONFIRMED' ||
+                    activeSel?.status === 'CONFIRMED' &&
                     activeSel?.confirmed_at
                   );
 
@@ -236,10 +236,7 @@ export function App() {
           if (isEligible) {
             const activeSel = eligData.active_plan_selection;
             const isConfirmed = Boolean(
-              user.is_confirmed ||
-              user.confirmation_status === 'CONFIRMED' ||
-              user.confirmed_plan_id ||
-              activeSel?.status === 'CONFIRMED' ||
+              activeSel?.status === 'CONFIRMED' &&
               activeSel?.confirmed_at
             );
 
@@ -381,27 +378,38 @@ export function App() {
   const handleSelectPlan = async (plan) => {
     try {
       const res = await eligibilityApi.selectPlan(plan.plan_id);
-      const activeConfId = confirmedPlanId || currentUser?.confirmed_plan_id;
-      const isThisPlanConfirmed = Boolean(
-        res?.status === 'CONFIRMED' ||
-        (activeConfId && activeConfId === plan.plan_id)
-      );
 
+      // When selecting a plan from the plan list, it starts unconfirmed so the user can verify and confirm it
       const planToSet = {
         ...plan,
-        is_confirmed: isThisPlanConfirmed,
-        status: isThisPlanConfirmed ? 'CONFIRMED' : 'ACTIVE',
-        confirmed_at: isThisPlanConfirmed ? (res?.confirmed_at || confirmedPlan?.confirmed_at || currentUser?.confirmed_at) : null
+        is_confirmed: false,
+        status: 'ACTIVE',
+        confirmed_at: null
       };
 
       setSelectedPlan(planToSet);
       sessionStorage.setItem('ins_app_selected_plan', JSON.stringify(planToSet));
 
-      // As per requirement:
-      // eligibility check -> choose plan -> chatbot & confirm options enabled in sidebar -> user sees & reviews it -> confirms manually with pop up
-      // Direct user to 'confirm' (Confirm & Review) to see and review the plan:
-      setActiveTab('confirm');
-      sessionStorage.setItem('ins_app_active_tab', 'confirm');
+      // Reset confirmed plan state when selecting a plan
+      setConfirmedPlanId(null);
+      setConfirmedPlan(null);
+      sessionStorage.removeItem('ins_app_confirmed_plan');
+      if (currentUser) {
+        currentUser.is_confirmed = false;
+        currentUser.confirmed_plan_id = null;
+        currentUser.confirmation_status = 'NOT_CONFIRMED';
+      }
+
+      // Requirement:
+      // For employee: when clicking on any plan, navigate directly to RAG chatbot ('chat')
+      // For customer: navigate to Confirm & Review ('confirm') to verify details before manual confirmation
+      if (userRole === 'employee') {
+        setActiveTab('chat');
+        sessionStorage.setItem('ins_app_active_tab', 'chat');
+      } else {
+        setActiveTab('confirm');
+        sessionStorage.setItem('ins_app_active_tab', 'confirm');
+      }
     } catch (err) {
       console.error("Plan selection error:", err);
       throw err;
@@ -463,8 +471,6 @@ export function App() {
   }
 
   // Authenticated State: Full Protected Application Access (100vh Edge-to-Edge)
-  const userRole = currentUser.role || 'customer';
-  const isAdmin = userRole === 'admin';
 
   return (
     <div className="app-workspace-root">
@@ -711,11 +717,7 @@ export function App() {
                   <div className="scrollable-page-container">
                     <ConfirmReviewScreen
                       currentUser={currentUser}
-                      selectedPlan={
-                        (confirmedPlanId && selectedPlan?.plan_id !== confirmedPlanId && confirmedPlan)
-                          ? confirmedPlan
-                          : (confirmedPlan || selectedPlan)
-                      }
+                      selectedPlan={selectedPlan || confirmedPlan}
                       assessment={userAssessment}
                       onConfirmationSuccess={(confData, proceedToChat = false) => {
                         const confDate = confData.confirmedAt || new Date().toISOString();

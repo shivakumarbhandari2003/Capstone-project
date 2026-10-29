@@ -318,11 +318,45 @@ export function ClaimPredictorDrawer({
         await new Promise((resolve) => setTimeout(resolve, remainingDelay));
       }
 
-      const formattedVal = res?.formatted_prediction || (res?.prediction != null ? `₹${Number(res.prediction).toLocaleString('en-IN')}` : '₹0.00');
+      const predRaw = res?.prediction ?? 0;
+      const formattedVal = Number(predRaw).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      const claimType = formData.claim_type || 'Major surgery';
+      const planName = `Health Shield – ${formData.plan || 'Gold'}`;
+      const extFlag = Number(formData.extended_stay_flag || 0);
+      const extStr = extFlag === 1 ? 'Yes (≥ 8 days)' : 'No (< 8 days, if No)';
+      const preExStr = formData.pre_existing === 'yes' ? 'Yes (Declared)' : 'No (None declared)';
+
+      const fallbackContent = [
+        '### ESTIMATED CLAIM PAYOUT',
+        `# Rs. ${formattedVal}`,
+        `*ML-Generated Estimate | ${claimType}*`,
+        '',
+        '---',
+        '',
+        '### CLAIM ASSESSMENT DETAILS',
+        '',
+        '| Policyholder Age | Days Hospitalised | ICU Days |',
+        '| :--- | :--- | :--- |',
+        `| **${formData.age}** years | **${formData.days_hospitalised}** days | **${formData.icu_days}** days |`,
+        '',
+        '| Procedures Claimed | Prior Daycare Claims | Plan Type |',
+        '| :--- | :--- | :--- |',
+        `| **${formData.procedures_claimed}** procedures | **${formData.prior_daycare_claims_year}** procedures | **${planName}** |`,
+        '',
+        '| Claim Type | Extended Stay | Pre-existing |',
+        '| :--- | :--- | :--- |',
+        `| **${claimType}** | **${extStr}** | **${preExStr}** |`,
+        '',
+        '> **Note:** Please verify original documents/policies/rules before reimbursement.'
+      ].join('\n');
+
       const assistantMsg = res?.message || res?.assistant_message || {
         message_id: 'pred-' + Date.now(),
         role: 'assistant',
-        content: `Based on the provided criteria, the machine learning model estimates a claim payout of approximately **${formattedVal}** for **${formData.claim_type}** under **Health Shield – ${formData.plan}**.`,
+        content: fallbackContent,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         citations: []
       };

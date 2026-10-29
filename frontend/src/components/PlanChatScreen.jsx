@@ -758,6 +758,14 @@ export function PlanChatScreen({
         await new Promise((resolve) => setTimeout(resolve, remainingDelay));
       }
       setError(err.message);
+      const fallbackAssistantMsg = {
+        message_id: 'err-' + Date.now(),
+        role: 'assistant',
+        content: 'I encountered an issue processing your request (' + (err.message || 'Network error') + '). Please try resending your message or asking about specific benefits such as Hospital Cash, ICU allowances, or Major Surgery limits.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        citations: []
+      };
+      setMessages((prev) => [...prev, fallbackAssistantMsg]);
     } finally {
       setLoading(false);
     }

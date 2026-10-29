@@ -7827,3 +7827,9 @@ html, body, #root {
     gap: 20px !important;
   }
 }
+
+.chat-divider {
+  border: none;
+  border-top: 1.5px solid #e2e8f0;
+  margin: 14px 0;
+}

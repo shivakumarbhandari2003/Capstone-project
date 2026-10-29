@@ -27,7 +27,7 @@ class ClaimPredictionResponse(BaseModel):
     request_id: str
     prediction: float
     formatted_prediction: str
-    output_units: str = "INR (₹)"
+    output_units: str = "INR (Rs.)"
     validated_inputs: Dict[str, Any]
     message: Optional[Dict[str, Any]] = None
     assistant_message: Optional[Dict[str, Any]] = None
