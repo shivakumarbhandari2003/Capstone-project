@@ -567,7 +567,7 @@ class AnswerGenerationService:
                 )
 
         # 2.3.1 Major Surgery Overall Limit or Category Payouts Direct Inquiries
-        if has_surgery and any(w in q_clean for w in ["overall", "maximum payout", "limit", "category", "categories", "payout"]):
+        if has_surgery and any(w in q_clean for w in ["overall", "maximum payout", "limit", "category", "categories", "payout", "payouts", "amount", "cost", "basis", "tier"]):
             if "overall" in q_clean or "maximum" in q_clean:
                 if "basic" in plan_lower:
                     return (
@@ -586,11 +586,11 @@ class AnswerGenerationService:
                 elif "gold" in plan_lower:
                     return (
                         f"Under **Health Shield \u2013 Gold**, the overall cumulative limit for major surgeries is "
-                        f"**up to Rs. 15,00,000** (or up to the schedule limit) over the applicable coverage period, "
+                        f"**up to Rs. 25,00,000** (or 5 times the benefit basis) over the applicable coverage period, "
                         f"based on a benefit basis of Rs. 5,00,000.\n\n"
                         f"[Health Shield \u2013 Gold, Section 5: MAJOR SURGERY BENEFIT, p. 4]"
                     )
-            elif any(w in q_clean for w in ["category", "categories", "tier"]):
+            elif any(w in q_clean for w in ["category", "categories", "tier", "payout", "payouts", "structure", "amount", "cost", "basis"]) or "surgery" in q_clean:
                 if "basic" in plan_lower:
                     return (
                         f"Under **Health Shield \u2013 Basic**, Major Surgery payouts are structured across 4 illustrative categories based on a Rs. 2,00,000 benefit basis:\n\n"
@@ -601,6 +601,16 @@ class AnswerGenerationService:
                         f"- **Overall Limit**: Up to 3 times the benefit basis (Rs. 6,00,000 total).\n\n"
                         f"[Health Shield \u2013 Basic, Section 5: MAJOR SURGERY BENEFIT, p. 3]"
                     )
+                elif "silver" in plan_lower:
+                    return (
+                        f"Under **Health Shield \u2013 Silver**, Major Surgery payouts are structured across 4 illustrative categories based on a Rs. 4,00,000 benefit basis:\n\n"
+                        f"- **Category 1 (100%)**: Rs. 4,00,000 (Open-heart surgery or major organ transplant)\n"
+                        f"- **Category 2 (60%)**: Rs. 2,40,000 (Major neurosurgery or complex abdominal surgery)\n"
+                        f"- **Category 3 (40%)**: Rs. 1,60,000 (Specified major orthopedic surgery)\n"
+                        f"- **Category 4 (20%)**: Rs. 80,000 (Other listed eligible major procedures)\n"
+                        f"- **Overall Limit**: Up to 3 times the benefit basis (Rs. 12,00,000 total).\n\n"
+                        f"[Health Shield \u2013 Silver, Section 5: MAJOR SURGERY BENEFIT, p. 3]"
+                    )
                 elif "gold" in plan_lower:
                     return (
                         f"Under **Health Shield \u2013 Gold**, Major Surgery payouts are structured across 4 illustrative categories based on a Rs. 5,00,000 benefit basis:\n\n"
@@ -608,9 +618,88 @@ class AnswerGenerationService:
                         f"- **Category 2 (60%)**: Rs. 3,00,000 (Major neurosurgery or complex abdominal surgery)\n"
                         f"- **Category 3 (40%)**: Rs. 2,00,000 (Specified major orthopedic surgery)\n"
                         f"- **Category 4 (20%)**: Rs. 1,00,000 (Other listed eligible major procedures)\n"
-                        f"- **Overall Limit**: Up to Rs. 15,00,000 cumulative payout.\n\n"
-                        f"[Health Shield \u2013 Gold, Section 5: MAJOR SURGERY BENEFIT, p. 4]"
+                        f"- **Overall Limit**: Up to 5 times the benefit basis (Rs. 25,00,000 cumulative maximum).\n\n"
+                        f"[Health Shield \u2013 Gold, Section 5: MAJOR SURGERY BENEFIT, p. 3-4]"
                     )
+                elif "employee" in plan_lower or "executive" in plan_lower:
+                    return (
+                        f"Under **Executive Employee Insurance Plan**, Major Surgery payouts are structured based on a Rs. 10,00,000 benefit basis:\n\n"
+                        f"- **Category 1 (100%)**: Rs. 10,00,000 (Open-heart surgery or major organ transplant)\n"
+                        f"- **Category 2 (60%)**: Rs. 6,00,000 (Major neurosurgery or complex abdominal surgery)\n"
+                        f"- **Category 3 (40%)**: Rs. 4,00,000 (Specified major orthopedic surgery)\n"
+                        f"- **Category 4 (20%)**: Rs. 2,00,000 (Other listed eligible major procedures)\n"
+                        f"- **Overall Limit**: Up to 10× benefit basis (Rs. 1,00,00,000 cumulative maximum).\n\n"
+                        f"[Executive Employee Insurance Plan, Section 5: MAJOR SURGERY BENEFIT, p. 3]"
+                    )
+
+        # 2.3.2 Day-Care Procedure Benefit Direct Inquiries
+        if any(w in q_clean for w in ["day-care", "day care", "daycare"]):
+            if "gold" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Gold**, the **Day-Care Procedure Benefit** provides:\n\n"
+                    f"- **Benefit Amount**: Rs. 25,000 per eligible listed procedure.\n"
+                    f"- **Annual Claim Limit**: Up to 2 claims per policy year (maximum Rs. 50,000 per policy year).\n"
+                    f"- **Overall Procedure Limit**: Rs. 50,000 per eligible procedure and Rs. 50,000 per policy year.\n"
+                    f"- **Eligible Procedures**: Includes covered procedures requiring less than 24 hours of hospital care on the approved schedule (such as dialysis, chemotherapy, radiotherapy, cataract surgery).\n\n"
+                    f"[Health Shield \u2013 Gold, Section 6: DAY-CARE PROCEDURE BENEFIT, p. 4-5]"
+                )
+            elif "silver" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Silver**, the **Day-Care Procedure Benefit** provides:\n\n"
+                    f"- **Benefit Amount**: Rs. 15,000 per eligible listed procedure.\n"
+                    f"- **Annual Claim Limit**: Up to 2 procedures per policy year (maximum Rs. 30,000 per policy year).\n"
+                    f"- **Eligible Procedures**: Listed procedures requiring less than 24 hours of hospital care on the approved schedule.\n\n"
+                    f"[Health Shield \u2013 Silver, Section 6: DAY-CARE PROCEDURE BENEFIT, p. 3-4]"
+                )
+            elif "basic" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Basic**, the **Day-Care Procedure Benefit** provides:\n\n"
+                    f"- **Benefit Amount**: Rs. 10,000 per eligible listed procedure.\n"
+                    f"- **Annual Claim Limit**: Maximum 1 procedure per policy year (maximum Rs. 10,000 per policy year).\n"
+                    f"- **Eligible Procedures**: Listed procedures requiring less than 24 hours of hospital care on the approved schedule.\n\n"
+                    f"[Health Shield \u2013 Basic, Section 6: DAY-CARE PROCEDURE BENEFIT, p. 3-4]"
+                )
+            elif "employee" in plan_lower or "executive" in plan_lower:
+                return (
+                    f"Under **Executive Employee Insurance Plan**, the **Day-Care Procedure Benefit** provides:\n\n"
+                    f"- **Benefit Amount**: Rs. 50,000 per eligible listed procedure.\n"
+                    f"- **Annual Limit**: Up to 3 procedures per policy year (overall limit 30 procedures).\n\n"
+                    f"[Executive Employee Insurance Plan, Section 6: DAY-CARE PROCEDURE BENEFIT, p. 4]"
+                )
+
+        # 2.3.3 Extended Hospital Stay Benefit (30+ continuous days)
+        if any(w in q_clean for w in ["extended hospital stay", "extended stay", "30 consecutive days", "exceeds 30 days", "30 days"]):
+            if "gold" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Gold**, when continuous hospitalization exceeds 30 consecutive days, the **Extended Hospital Stay Benefit** applies:\n\n"
+                    f"- **Lump-Sum Benefit**: A fixed payment of **Rs. 50,000**.\n"
+                    f"- **Eligibility**: Continuous inpatient hospitalization exceeding 30 consecutive days for an eligible covered condition.\n"
+                    f"- **Annual Limit**: Maximum 1 claim per policy year (maximum Rs. 50,000 per policy year).\n\n"
+                    f"[Health Shield \u2013 Gold, Section 9: EXTENDED HOSPITAL STAY BENEFIT, p. 6]"
+                )
+            elif "silver" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Silver**, when continuous hospitalization exceeds 30 consecutive days, the **Extended Hospital Stay Benefit** applies:\n\n"
+                    f"- **Lump-Sum Benefit**: A fixed payment of **Rs. 30,000**.\n"
+                    f"- **Eligibility**: Continuous inpatient hospitalization exceeding 30 consecutive days.\n"
+                    f"- **Annual Limit**: Maximum 1 claim per policy year (maximum Rs. 30,000 per policy year).\n\n"
+                    f"[Health Shield \u2013 Silver, Section 9: EXTENDED HOSPITAL STAY BENEFIT, p. 5]"
+                )
+            elif "basic" in plan_lower:
+                return (
+                    f"Under **Health Shield \u2013 Basic**, when continuous hospitalization exceeds 30 consecutive days, the **Extended Hospital Stay Benefit** applies:\n\n"
+                    f"- **Lump-Sum Benefit**: A fixed payment of **Rs. 15,000**.\n"
+                    f"- **Eligibility**: Continuous inpatient hospitalization exceeding 30 consecutive days.\n"
+                    f"- **Annual Limit**: Maximum 1 claim per policy year (maximum Rs. 15,000 per policy year).\n\n"
+                    f"[Health Shield \u2013 Basic, Section 9: EXTENDED HOSPITAL STAY BENEFIT, p. 5]"
+                )
+            elif "employee" in plan_lower or "executive" in plan_lower:
+                return (
+                    f"Under **Executive Employee Insurance Plan**, when continuous hospitalization exceeds 30 consecutive days, the **Extended Hospital Stay Benefit** applies:\n\n"
+                    f"- **Lump-Sum Benefit**: A fixed payment of **Rs. 1,00,000**.\n"
+                    f"- **Annual Limit**: Maximum 1 claim per policy year (up to 10 claims overall).\n\n"
+                    f"[Executive Employee Insurance Plan, Section 9: EXTENDED HOSPITAL STAY BENEFIT, p. 5]"
+                )
 
         # 2.4 Topic presence check: If query specifically asks for a term and none of the chunks mention it
         topic_keywords = [
@@ -686,35 +775,68 @@ class AnswerGenerationService:
             else:
                 return f"**Yes.** Under **{selected_name}**, {lead_statement}.\n\n{citation_str}"
 
-        # General factual query: Return strictly the 1-2 most relevant matching sentences or table rows
-        matching_snippets = []
-        for line in chunk_text.split("\n"):
-            line_str = clean_policy_text(line)
+        # General factual query: Return high-relevance structured facts, limits, or table rows
+        # 1. If chunk contains a relevant markdown table, return the table directly
+        table_match = re.search(r"(\|.+?\|\n\|[\s\-:|]+\|\n(?:\|.+?\|\n?)+)", chunk_text)
+        if table_match and any(w in q_clean for w in ["table", "category", "categories", "tier", "surgery", "payout", "limit", "structure"]):
+            clean_table = table_match.group(1).strip().replace("₹", "Rs. ")
+            return f"{clean_table}\n\n{citation_str}"
+
+        # 2. Segment chunk text by newlines and inline bullet glyphs (e.g. \uf0b7, , •)
+        raw_segments = re.split(r"[\n\uf0b7•▪▫▶►]+", chunk_text)
+        candidates = []
+        for seg in raw_segments:
+            s = clean_policy_text(seg)
+            # Strip section header prefix (e.g. 'SECTION 6: DAY-CARE BENEFIT') to preserve the actual clause
+            s = re.sub(r"^SECTION\s+\d+:\s*[A-Z\s\(\)\-–—]+\s+", "", s, flags=re.IGNORECASE)
+            s = re.sub(r"^[#*_\-\s]+", "", s).strip()
             if (
-                not line_str
-                or line_str.startswith("[")
-                or line_str.endswith("]")
-                or "| section" in line_str.lower()
-                or line_str.upper().startswith("SECTION ")
-                or "table of contents" in line_str.lower()
+                not s
+                or s.startswith("[")
+                or s.endswith("]")
+                or "plan id" in s.lower()
+                or "table of contents" in s.lower()
+                or "| section" in s.lower()
+                or len(s) < 10
             ):
                 continue
-            if "|" in line_str and "---" in line_str:
-                matching_snippets.append(line_str)
-            elif any(w in line_str.lower() for w in query_words) and len(line_str) > 15:
-                # Strip leading dashes or bullet symbols
-                line_str = re.sub(r"^[\s\-*]+", "", line_str).strip()
-                if ":" in line_str and not line_str.startswith("**"):
-                    k, v = line_str.split(":", 1)
-                    matching_snippets.append(f"- **{k.strip()}**: {v.strip()}")
-                else:
-                    matching_snippets.append(f"- {line_str}")
-                if len(matching_snippets) >= 2:
-                    break
+            candidates.append(s)
+
+        # Score and rank candidates by query keywords and factual specificity
+        scored_candidates = []
+        for c in candidates:
+            score = sum(1 for w in query_words if w in c.lower())
+            if any(term in c.lower() for term in ["rs.", "₹", "day", "days", "limit", "maximum", "benefit", "payout", "claim", "lump-sum", "%"]):
+                score += 2
+            scored_candidates.append((score, c))
+
+        scored_candidates.sort(key=lambda x: x[0], reverse=True)
+        top_items = [c for s, c in scored_candidates if s > 0][:4]
+
+        matching_snippets = []
+        for item in top_items:
+            item_clean = item.strip()
+            if ":" in item_clean and not item_clean.startswith("**"):
+                k, v = item_clean.split(":", 1)
+                matching_snippets.append(f"- **{k.strip()}**: {v.strip()}")
+            else:
+                matching_snippets.append(f"- {item_clean}")
 
         if not matching_snippets:
-            clean_first = clean_policy_text(chunk_text.split(".")[0])
-            matching_snippets.append(f"- {clean_first}.")
+            # Fallback: find any sentence with numbers or limits
+            all_sentences = [clean_policy_text(s) for s in re.split(r"(?<=[.!?])\s+", chunk_text) if len(s.strip()) > 15]
+            factual_sentences = [
+                s for s in all_sentences
+                if not s.upper().startswith("SECTION ")
+                and any(term in s.lower() for term in ["rs.", "₹", "day", "benefit", "limit", "%", "claim"])
+            ]
+            if factual_sentences:
+                for fs in factual_sentences[:3]:
+                    matching_snippets.append(f"- {fs.strip()}")
+            else:
+                clean_first = clean_policy_text(chunk_text.split(".")[0])
+                clean_first = re.sub(r"^SECTION\s+\d+:\s*[A-Z\s\(\)\-–—]+\s+", "", clean_first, flags=re.IGNORECASE)
+                matching_snippets.append(f"- {clean_first}.")
 
         ans = "\n".join(matching_snippets) + f"\n\n{citation_str}"
         ans = ans.replace("₹", "Rs. ")
