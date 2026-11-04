@@ -43,12 +43,11 @@ export function App() {
   useEffect(() => {
     async function restoreSession() {
       setAuthLoading(true);
+      const user = await authApi.getCurrentUser();
       const token = authApi.getToken();
-      if (token) {
+      if (user && token) {
         setAuthToken(token);
-        const user = await authApi.getCurrentUser();
-        if (user) {
-          setCurrentUser(user);
+        setCurrentUser(user);
 
           const savedPlan = sessionStorage.getItem('ins_app_selected_plan');
           const savedTab = sessionStorage.getItem('ins_app_active_tab');
@@ -213,7 +212,6 @@ export function App() {
           setCurrentUser(null);
           setAuthToken(null);
         }
-      }
       setAuthLoading(false);
     }
     restoreSession();

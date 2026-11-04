@@ -71,3 +71,7 @@ code.txt
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# JWT Local Secrets
+.jwt_secret*
+data/.jwt_secret*

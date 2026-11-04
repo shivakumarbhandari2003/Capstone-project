@@ -4,15 +4,46 @@ const USER_KEY = 'insurance_auth_user';
 // Fallback to direct backend URL if proxy fails or in standalone mode
 const API_URL = '/api';
 
+let _refreshPromise = null;
+
 async function safeFetch(endpoint, options = {}, retries = 2) {
+  // Ensure HttpOnly cookies are attached across requests
+  const fetchOptions = {
+    ...options,
+    credentials: options.credentials || 'include'
+  };
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, options);
+      const res = await fetch(`${API_URL}${endpoint}`, fetchOptions);
       // If Vite proxy returns 502/503/504 because backend is still starting up, retry shortly
       if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < retries) {
         await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
         continue;
       }
+
+      // Transparent 401 token refresh interceptor (only once, never for auth endpoints)
+      if (
+        res.status === 401 &&
+        !endpoint.includes('/auth/login') &&
+        !endpoint.includes('/auth/refresh') &&
+        !endpoint.includes('/auth/signup') &&
+        !options._isRetry
+      ) {
+        const refreshedToken = await authApi.refreshAccessToken();
+        if (refreshedToken) {
+          const retryHeaders = {
+            ...(fetchOptions.headers || {}),
+            'Authorization': `Bearer ${refreshedToken}`
+          };
+          return await safeFetch(endpoint, {
+            ...fetchOptions,
+            headers: retryHeaders,
+            _isRetry: true
+          }, 0);
+        }
+      }
+
       return res;
     } catch (err) {
       if (attempt < retries) {
@@ -22,7 +53,7 @@ async function safeFetch(endpoint, options = {}, retries = 2) {
       // If relative fetch fails (e.g. proxy issue), try direct backend port
       try {
         const directUrl = `http://127.0.0.1:8000/api${endpoint}`;
-        return await fetch(directUrl, options);
+        return await fetch(directUrl, fetchOptions);
       } catch {
         throw new Error('Backend server is currently initializing or unreachable. Please verify backend is running on port 8000.');
       }
@@ -61,7 +92,7 @@ function extractErrorMessage(data, fallbackMsg) {
 export const authApi = {
   getToken() {
     try {
-      return localStorage.getItem(TOKEN_KEY);
+      return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
     } catch {
       return null;
     }
@@ -69,7 +100,10 @@ export const authApi = {
 
   setToken(token) {
     try {
-      localStorage.setItem(TOKEN_KEY, token);
+      if (token) {
+        localStorage.setItem(TOKEN_KEY, token);
+        sessionStorage.setItem(TOKEN_KEY, token);
+      }
     } catch (e) {
       console.error('Could not save auth token:', e);
     }
@@ -79,6 +113,7 @@ export const authApi = {
     try {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
     } catch (e) {
       console.error('Could not clear auth session:', e);
     }
@@ -95,10 +130,57 @@ export const authApi = {
 
   setStoredUser(user) {
     try {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      if (user) {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+      }
     } catch (e) {
       console.error('Could not save user data:', e);
     }
+  },
+
+  async refreshAccessToken() {
+    // Single-flight mutex promise to prevent concurrent refresh storms
+    if (_refreshPromise) {
+      return _refreshPromise;
+    }
+
+    _refreshPromise = (async () => {
+      try {
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'include'
+        });
+
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            this.clearSession();
+          }
+          return null;
+        }
+
+        const data = await parseResponse(res);
+        const newToken = data.access_token || data.token;
+        if (newToken) {
+          this.setToken(newToken);
+          if (data.user) {
+            this.setStoredUser(data.user);
+          }
+          return newToken;
+        }
+        return null;
+      } catch (err) {
+        console.warn('Network error during token refresh (retaining state):', err);
+        return null;
+      } finally {
+        _refreshPromise = null;
+      }
+    })();
+
+    return _refreshPromise;
   },
 
   async login(email, password) {
@@ -112,7 +194,8 @@ export const authApi = {
     if (!res.ok) {
       throw new Error(extractErrorMessage(data, `Login failed (HTTP ${res.status}).`));
     }
-    this.setToken(data.token);
+    const token = data.access_token || data.token;
+    this.setToken(token);
     this.setStoredUser(data.user);
     return data;
   },
@@ -133,7 +216,8 @@ export const authApi = {
     if (!res.ok) {
       throw new Error(extractErrorMessage(data, `Signup failed (HTTP ${res.status}).`));
     }
-    this.setToken(data.token);
+    const token = data.access_token || data.token;
+    this.setToken(token);
     this.setStoredUser(data.user);
     return data;
   },
@@ -141,14 +225,12 @@ export const authApi = {
   async logout() {
     const token = this.getToken();
     try {
-      if (token) {
-        await safeFetch('/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-      }
+      await safeFetch('/auth/logout', {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
     } catch (e) {
       console.warn('Logout API error:', e);
     } finally {
@@ -157,8 +239,13 @@ export const authApi = {
   },
 
   async getCurrentUser() {
-    const token = this.getToken();
-    if (!token) return null;
+    let token = this.getToken();
+    if (!token) {
+      // Opportunistically attempt background refresh using HttpOnly cookie
+      token = await this.refreshAccessToken();
+      if (!token) return null;
+    }
+
     try {
       const res = await safeFetch('/auth/me', {
         headers: {
@@ -167,6 +254,20 @@ export const authApi = {
       });
       if (!res.ok) {
         if (res.status === 401) {
+          // Token may have expired; attempt refresh once
+          const refreshedToken = await this.refreshAccessToken();
+          if (refreshedToken) {
+            const retryRes = await safeFetch('/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${refreshedToken}`
+              }
+            });
+            if (retryRes.ok) {
+              const refreshedUser = await parseResponse(retryRes);
+              this.setStoredUser(refreshedUser);
+              return refreshedUser;
+            }
+          }
           this.clearSession();
           return null;
         }

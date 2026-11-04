@@ -1,14 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, status
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
 from backend.app.api.schemas.auth import (
     SignupRequest,
     LoginRequest,
     AuthResponse,
+    RefreshRequest,
+    TokenRefreshResponse,
     UserPayload,
     UserProfileResponse
 )
 from backend.app.services.auth_service import (
     register_user,
     authenticate_user,
+    refresh_user_tokens,
     logout_session,
     UserIdentity,
     get_current_user,
@@ -16,27 +20,45 @@ from backend.app.services.auth_service import (
 )
 from backend.app.registry.plans import PLAN_REGISTRY
 from backend.app.db.sqlite_manager import sqlite_db
+from backend.app.core.config import settings
 from backend.app.core.logging_config import logger
 
 router = APIRouter(prefix="/auth", tags=["Authentication & User Management"])
 
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def signup(req: SignupRequest):
+def signup(req: SignupRequest, response: Response, request: Request):
     """
     Registers a new account securely.
     - Hashes password using bcrypt.
     - Role is derived server-side.
-    - Returns session token and user profile without exposing sensitive credentials.
+    - Issues a short-lived access JWT and sets a secure HttpOnly refresh cookie.
+    - Returns access token and user profile without exposing sensitive credentials.
     """
-    user_record, token, notice = register_user(
+    user_record, access_token, refresh_token, notice = register_user(
         email=req.email,
         password=req.password,
         requested_role=req.role,
-        full_name=req.full_name
+        full_name=req.full_name,
+        device_info=request.headers.get("User-Agent", "")[:200]
     )
 
+    # Set HttpOnly, Secure, SameSite refresh cookie for browser security
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+        path="/api/auth"
+    )
+
+    is_api_client = request.headers.get("X-Client-Type", "").lower() == "api"
+
     return AuthResponse(
-        token=token,
+        token=access_token,
+        access_token=access_token,
+        token_type="Bearer",
         user=UserPayload(
             user_id=user_record["user_id"],
             email=user_record["email"],
@@ -45,22 +67,39 @@ def signup(req: SignupRequest):
             is_approved=bool(user_record["is_approved"]),
             requested_role=user_record["requested_role"]
         ),
+        refresh_token=refresh_token if is_api_client else None,
         message=notice or "Registration successful."
     )
 
 @router.post("/login", response_model=AuthResponse)
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response, request: Request):
     """
     Authenticates email and password against SQLite store.
-    Generates a secure session token and returns the authenticated user identity.
+    Generates a 15-minute access JWT and sets a secure HttpOnly refresh cookie.
     """
-    user_record, token = authenticate_user(
+    user_record, access_token, refresh_token = authenticate_user(
         email=req.email,
-        password=req.password
+        password=req.password,
+        device_info=request.headers.get("User-Agent", "")[:200]
     )
 
+    # Set HttpOnly, Secure, SameSite refresh cookie for browser security
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+        path="/api/auth"
+    )
+
+    is_api_client = request.headers.get("X-Client-Type", "").lower() == "api"
+
     return AuthResponse(
-        token=token,
+        token=access_token,
+        access_token=access_token,
+        token_type="Bearer",
         user=UserPayload(
             user_id=user_record["user_id"],
             email=user_record["email"],
@@ -69,13 +108,70 @@ def login(req: LoginRequest):
             is_approved=bool(user_record["is_approved"]),
             requested_role=user_record["requested_role"]
         ),
+        refresh_token=refresh_token if is_api_client else None,
         message="Login successful."
     )
 
-@router.post("/logout")
-def logout(request: Request):
+@router.post("/refresh", response_model=TokenRefreshResponse)
+def refresh(response: Response, request: Request, req: Optional[RefreshRequest] = None):
     """
-    Invalidates the active user session token.
+    Refreshes access token and rotates the refresh token.
+    Priority 1: HttpOnly cookie 'insurance_refresh_token' (browser application).
+    Priority 2: X-Refresh-Token header or JSON body 'refresh_token' (API / Test clients).
+    """
+    refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        refresh_token = request.headers.get("X-Refresh-Token")
+    if not refresh_token and req:
+        refresh_token = req.refresh_token
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token provided."
+        )
+
+    user_record, new_access_token, new_refresh_token = refresh_user_tokens(
+        refresh_token=refresh_token,
+        device_info=request.headers.get("User-Agent", "")[:200]
+    )
+
+    # Update HttpOnly refresh cookie with newly rotated token
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=new_refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
+        secure=settings.REFRESH_COOKIE_SECURE,
+        samesite=settings.REFRESH_COOKIE_SAMESITE,
+        path="/api/auth"
+    )
+
+    is_api_client = request.headers.get("X-Client-Type", "").lower() == "api"
+
+    return TokenRefreshResponse(
+        token=new_access_token,
+        access_token=new_access_token,
+        token_type="Bearer",
+        user=UserPayload(
+            user_id=user_record["user_id"],
+            email=user_record["email"],
+            role=user_record["effective_role"],
+            full_name=user_record["full_name"],
+            is_approved=bool(user_record["is_approved"]),
+            requested_role=user_record.get("requested_role")
+        ),
+        refresh_token=new_refresh_token if is_api_client else None,
+        message="Token refreshed successfully."
+    )
+
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    """
+    Invalidates the active user session token:
+    - Blacklists access token JTI.
+    - Revokes refresh token in SQLite.
+    - Clears HttpOnly refresh cookie.
     """
     auth_header = request.headers.get("Authorization", "").strip()
     token = None
@@ -84,8 +180,15 @@ def logout(request: Request):
     elif "X-Session-Token" in request.headers:
         token = request.headers["X-Session-Token"].strip()
 
-    if token:
-        logout_session(token)
+    refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME) or request.headers.get("X-Refresh-Token")
+
+    logout_session(token=token, refresh_token=refresh_token)
+
+    # Clear HttpOnly cookie in response
+    response.delete_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        path="/api/auth"
+    )
 
     return {"status": "SUCCESS", "message": "Session invalidated successfully."}
 

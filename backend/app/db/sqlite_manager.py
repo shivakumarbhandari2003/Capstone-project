@@ -222,6 +222,30 @@ class SQLiteManager:
                 CREATE INDEX IF NOT EXISTS idx_psel_user_status ON plan_selections(user_id, status);
                 CREATE INDEX IF NOT EXISTS idx_agent_req_user ON agent_contact_requests(user_id);
                 CREATE INDEX IF NOT EXISTS idx_agent_req_status ON agent_contact_requests(status);
+
+                CREATE TABLE IF NOT EXISTS refresh_tokens (
+                    token_id TEXT PRIMARY KEY,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    user_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    device_info TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    revoked_at TEXT DEFAULT NULL,
+                    replaced_by_token_id TEXT DEFAULT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS revoked_tokens (
+                    jti TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    revoked_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+                CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+                CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(expires_at);
             """)
             # Non-destructive idempotent schema migration for existing databases
             try:
@@ -494,8 +518,9 @@ class SQLiteManager:
 
     # ==================== SESSION MANAGEMENT ====================
 
-    def create_session(self, user_id: str, role: str, duration_hours: int = 24) -> str:
-        token = f"sess_{uuid.uuid4().hex}"
+    def create_session(self, user_id: str, role: str, duration_hours: int = 24, token: Optional[str] = None) -> str:
+        if not token:
+            token = f"sess_{uuid.uuid4().hex}"
         now = datetime.now(timezone.utc)
         expires_at = (now + timedelta(hours=duration_hours)).isoformat()
         with self._get_connection() as conn:
@@ -504,7 +529,7 @@ class SQLiteManager:
             cur.execute("DELETE FROM sessions WHERE expires_at < ?", (now.isoformat(),))
 
             cur.execute("""
-                INSERT INTO sessions (token, user_id, role, created_at, expires_at)
+                INSERT OR REPLACE INTO sessions (token, user_id, role, created_at, expires_at)
                 VALUES (?, ?, ?, ?, ?)
             """, (token, user_id, role, now.isoformat(), expires_at))
             
@@ -512,6 +537,15 @@ class SQLiteManager:
             cur.execute("UPDATE profiles SET last_login = ? WHERE user_id = ?", (now.isoformat(), user_id))
             conn.commit()
         return token
+
+    def get_raw_session(self, token: str) -> Optional[dict]:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM sessions WHERE token = ?", (token,))
+            row = cur.fetchone()
+            if row:
+                return dict(row)
+            return None
 
     def get_session(self, token: str) -> Optional[dict]:
         with self._get_connection() as conn:
@@ -551,6 +585,137 @@ class SQLiteManager:
             cur.execute("DELETE FROM sessions WHERE token = ?", (token,))
             conn.commit()
             return cur.rowcount > 0
+
+    # ==================== JWT REFRESH TOKEN & REVOCATION MANAGEMENT ====================
+
+    def save_refresh_token(
+        self,
+        token_hash: str,
+        user_id: str,
+        role: str,
+        duration_days: int = 7,
+        device_info: str = ""
+    ) -> dict:
+        token_id = f"rftk_{uuid.uuid4().hex}"
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(days=duration_days)).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO refresh_tokens (token_id, token_hash, user_id, role, device_info, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (token_id, token_hash, user_id, role, device_info, now.isoformat(), expires_at))
+            conn.commit()
+        return {
+            "token_id": token_id,
+            "token_hash": token_hash,
+            "user_id": user_id,
+            "role": role,
+            "created_at": now.isoformat(),
+            "expires_at": expires_at,
+            "revoked_at": None
+        }
+
+    def get_refresh_token_record(self, token_hash: str) -> Optional[dict]:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT rt.token_id, rt.token_hash, rt.user_id, rt.role, rt.device_info,
+                       rt.created_at, rt.expires_at, rt.revoked_at, rt.replaced_by_token_id,
+                       u.email, u.full_name, u.effective_role, u.is_approved
+                FROM refresh_tokens rt
+                JOIN users u ON rt.user_id = u.user_id
+                WHERE rt.token_hash = ?
+            """, (token_hash,))
+            row = cur.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def rotate_refresh_token(
+        self,
+        old_token_hash: str,
+        new_token_hash: str,
+        user_id: str,
+        role: str,
+        duration_days: int = 7,
+        device_info: str = ""
+    ) -> dict:
+        new_token_id = f"rftk_{uuid.uuid4().hex}"
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        expires_at = (now + timedelta(days=duration_days)).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            # Atomically mark old token as revoked and replaced
+            cur.execute("""
+                UPDATE refresh_tokens
+                SET revoked_at = ?, replaced_by_token_id = ?
+                WHERE token_hash = ? AND revoked_at IS NULL
+            """, (now_iso, new_token_id, old_token_hash))
+            
+            # Insert rotated replacement
+            cur.execute("""
+                INSERT INTO refresh_tokens (token_id, token_hash, user_id, role, device_info, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (new_token_id, new_token_hash, user_id, role, device_info, now_iso, expires_at))
+            conn.commit()
+            
+        return {
+            "token_id": new_token_id,
+            "token_hash": new_token_hash,
+            "user_id": user_id,
+            "role": role,
+            "created_at": now_iso,
+            "expires_at": expires_at,
+            "revoked_at": None
+        }
+
+    def revoke_refresh_token(self, token_hash: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE refresh_tokens
+                SET revoked_at = ?
+                WHERE token_hash = ? AND revoked_at IS NULL
+            """, (now_iso, token_hash))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def revoke_all_user_refresh_tokens(self, user_id: str) -> int:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE refresh_tokens
+                SET revoked_at = ?
+                WHERE user_id = ? AND revoked_at IS NULL
+            """, (now_iso, user_id))
+            conn.commit()
+            return cur.rowcount
+
+    def revoke_access_token_jti(self, jti: str, user_id: str, expires_at_iso: str) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT OR REPLACE INTO revoked_tokens (jti, user_id, expires_at, revoked_at)
+                VALUES (?, ?, ?, ?)
+            """, (jti, user_id, expires_at_iso, now_iso))
+            conn.commit()
+
+    def is_access_token_jti_revoked(self, jti: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            # Opportunistic cleanup of expired tokens in blocklist
+            cur.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (now_iso,))
+            conn.commit()
+            
+            cur.execute("SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,))
+            return cur.fetchone() is not None
+
 
     # ==================== CONVERSATIONS & CHAT HISTORY ====================
 

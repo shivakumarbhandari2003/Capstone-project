@@ -55,8 +55,22 @@ class UserPayload(BaseModel):
 
 class AuthResponse(BaseModel):
     token: str
+    access_token: Optional[str] = None
+    token_type: str = "Bearer"
     user: UserPayload
+    refresh_token: Optional[str] = None  # Kept None for browser flow (secured in HttpOnly cookie); populated only for automated API clients requesting body transport
     message: Optional[str] = None
+
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+class TokenRefreshResponse(BaseModel):
+    token: str
+    access_token: str
+    token_type: str = "Bearer"
+    user: UserPayload
+    refresh_token: Optional[str] = None
+    message: Optional[str] = "Token refreshed successfully."
 
 class UserProfileResponse(BaseModel):
     user_id: str

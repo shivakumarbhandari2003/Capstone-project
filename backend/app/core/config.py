@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
@@ -69,6 +70,15 @@ class Settings(BaseSettings):
     MAX_CONTEXT_TOKENS: int = 4000
     MAX_HISTORY_TURNS: int = 5
 
+    # JWT Authentication & Refresh Configuration
+    JWT_SECRET_KEY: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    REFRESH_COOKIE_NAME: str = "insurance_refresh_token"
+    REFRESH_COOKIE_SECURE: bool = False  # Set to True in production HTTPS
+    REFRESH_COOKIE_SAMESITE: str = "lax"
+
 settings = Settings()
 
 # Ensure directories exist
@@ -78,3 +88,22 @@ settings.STAGING_DIR.mkdir(parents=True, exist_ok=True)
 settings.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 settings.CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
 settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+def get_jwt_secret() -> str:
+    """Retrieve JWT secret from settings or persistent local secret store."""
+    if settings.JWT_SECRET_KEY and settings.JWT_SECRET_KEY.strip():
+        return settings.JWT_SECRET_KEY.strip()
+    
+    secret_file = settings.DATA_DIR / ".jwt_secret"
+    if secret_file.exists():
+        secret = secret_file.read_text(encoding="utf-8").strip()
+        if secret:
+            return secret
+            
+    # Generate and persist 64-byte URL-safe secret for development resilience across restarts
+    new_secret = secrets.token_urlsafe(64)
+    try:
+        secret_file.write_text(new_secret, encoding="utf-8")
+    except Exception:
+        pass
+    return new_secret
