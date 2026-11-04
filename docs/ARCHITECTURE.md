@@ -41,6 +41,7 @@ flowchart TD
 
     subgraph CoreEngine ["RAG & Retrieval Engine"]
         ScopeRes["Scope Resolver<br/>scope_resolver.py"]
+        Gatekeeper["Pre-Retrieval LLM Gatekeeper<br/>generation_service.py"]
         ConvoService["Conversation Service<br/>conversation_service.py"]
         Orchestrator["RAG Orchestrator<br/>rag_orchestrator.py"]
         
@@ -133,6 +134,7 @@ flowchart TD
   - Protects admin endpoints (`/api/admin/*`) strictly requiring `effective_role == 'admin'`.
   - Blocks client header role spoofing and prevents self-selection of the `admin` role during public signup.
 - **[scope_resolver.py](file:///c:/Users/shivu/OneDrive/Desktop/Capstone_rag/backend/app/services/scope_resolver.py)**: Enforces plan retrieval boundaries. Prevents cross-plan leaks, detects explicit multi-plan comparisons (e.g. *"Compare Basic and Gold"*), strips unpermitted plan targets from customer queries, and resolves conversational pronouns to the active policy.
+- **Pre-Retrieval LLM Gatekeeper (`generation_service.py`)**: Intercepts credential phishing, administrator role tampering, and out-of-scope non-insurance queries before embedding computation, saving 100% of retrieval tokens and compute while returning humanized boundary explanations.
 
 ### 3.3 Hybrid Search & Context Expansion
 - **[bm25_service.py](file:///c:/Users/shivu/OneDrive/Desktop/Capstone_rag/backend/app/services/bm25_service.py)**: In-memory `rank-bm25` lexical search pre-filtered by permitted plan IDs.

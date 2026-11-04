@@ -3,7 +3,7 @@ from typing import Optional
 from backend.app.services.auth_service import UserIdentity, AuthorizationService, ROLE_PLAN_PERMISSIONS
 from backend.app.services.scope_resolver import ScopeResolver, ScopeResolutionResult
 from backend.app.services.retrieval_service import HybridRetrievalService
-from backend.app.services.generation_service import AnswerGenerationService, GroundedAnswerResult
+from backend.app.services.generation_service import AnswerGenerationService, GroundedAnswerResult, GatekeeperResult
 from backend.app.services.conversation_service import ConversationManager, ConversationSession, ChatMessage
 from backend.app.core.guardrails import InputGuardrail, OutputGuardrail
 from backend.app.core.logging_config import logger
@@ -162,7 +162,7 @@ class RAGOrchestrator:
                 "retrieval_diagnostics": {}
             }
 
-        # 3. Execute Hybrid Retrieval with contextualized resolved query
+        # 3. Resolve search query
         t_start = time.time()
         search_query = (
             scope_result.search_query or
@@ -170,6 +170,68 @@ class RAGOrchestrator:
             scope_result.resolved_query or
             query
         )
+
+        # 2.5 Pre-Retrieval LLM Relevance & Scope Gatekeeper
+        # Validates query relevance BEFORE embedding generation and vector retrieval to save tokens and avoid false matches
+        gatekeeper_res = self.generation_service.check_query_relevance_and_scope(
+            query=search_query,
+            role=user.role,
+            selected_plan_id=session.selected_plan_id,
+            context_window=scope_result.context_window
+        )
+        if not gatekeeper_res.is_relevant:
+            logger.info(
+                f"[{conversation_id}] Query rejected by Pre-Retrieval Gatekeeper before embedding generation: "
+                f"category='{gatekeeper_res.category}', reason='{gatekeeper_res.reason}'"
+            )
+            if gatekeeper_res.category in ("credential_escalation", "phishing", "privilege_escalation", "system_disclosure"):
+                try:
+                    from backend.app.db.sqlite_manager import sqlite_db
+                    sqlite_db.record_audit_event(
+                        action=f"gatekeeper_{gatekeeper_res.category}_blocked",
+                        actor_id=user.user_id,
+                        actor_email=user.email,
+                        actor_role=user.role,
+                        target_resource=conversation_id,
+                        outcome="BLOCKED",
+                        details={
+                            "query_preview": sanitized_query[:80],
+                            "category": gatekeeper_res.category,
+                            "reason": gatekeeper_res.reason
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to record gatekeeper audit event: {e}")
+
+            assistant_msg = self.conversation_manager.add_turn(
+                conversation_id=conversation_id,
+                user_id=user.user_id,
+                user_query=query,
+                assistant_answer=gatekeeper_res.humanized_response or (
+                    f"I am your AI Health Insurance Assistant for your selected plan. "
+                    f"I can only help with questions regarding your health insurance benefits, coverage, and claims. "
+                    f"Please feel free to ask any questions about your policy!"
+                ),
+                citations=[],
+                effective_scope=scope_result.effective_scope,
+                is_comparison=False,
+                is_clarification=False,
+                contains_unverified=False
+            )
+            return {
+                "message": assistant_msg.model_dump(),
+                "scope_resolution": scope_result.model_dump(),
+                "retrieval_diagnostics": {
+                    "gatekeeper_blocked": True,
+                    "category": gatekeeper_res.category,
+                    "reason": gatekeeper_res.reason,
+                    "embeddings_generated": 0,
+                    "dense_retrieval_skipped": True,
+                    "bm25_retrieval_skipped": True
+                }
+            }
+
+        # 3. Execute Hybrid Retrieval with contextualized resolved query
         t_ret_start = time.time()
         retrieval_res = self.retrieval_service.retrieve(
             query=search_query,
@@ -236,7 +298,8 @@ class RAGOrchestrator:
             answer_text=final_answer_text,
             plan_id=session.selected_plan_id,
             role=user.role,
-            conversation_history=history_list
+            conversation_history=history_list,
+            provider_used=answer_res.provider_used
         )
 
         # 5. Persist turn to conversation session
