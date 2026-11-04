@@ -411,6 +411,8 @@ export function ConfirmReviewScreen({
         isConfirmed: true,
         confirmedAt: confDate,
         selectionId: response.selection_id,
+        plan_id: response.plan_id || planId,
+        planId: response.plan_id || planId,
         planName: response.plan_name || pDetails.plan_name
       };
       setConfirmedState(updatedConf);

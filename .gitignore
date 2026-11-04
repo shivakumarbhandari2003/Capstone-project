@@ -43,6 +43,8 @@ frontend/dist/
 *.sqlite3
 data/app.db*
 data/chroma_db/
+data/backups/
+*.bak
 
 # ==========================================
 # Logs & Scratch Scripts

@@ -82,13 +82,14 @@ def create_conversation(
                 )
 
         # 2. User must have an active or confirmed plan selection
-        active_selection = sqlite_db.get_active_plan_selection_for_user(user.user_id)
+        confirmed_selection = sqlite_db.get_confirmed_plan_selection_for_user(user.user_id)
+        active_selection = confirmed_selection or sqlite_db.get_active_plan_selection_for_user(user.user_id)
         if not active_selection:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No active plan selection found. Please select an eligible plan before initiating policy consultation."
             )
-        is_user_confirmed = active_selection.get("status") == "CONFIRMED"
+        is_user_confirmed = bool(confirmed_selection) or (active_selection.get("status") == "CONFIRMED")
         if not is_user_confirmed:
             if active_selection.get("selected_plan_id") != req.selected_plan_id:
                 raise HTTPException(

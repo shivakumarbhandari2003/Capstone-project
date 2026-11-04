@@ -12,11 +12,17 @@ def test_confirmed_plan_preserved_and_chatbot_exploration_allowed():
     and use the chatbot for that visited plan. The visited plan is strictly used for
     chatbot response, preserving the confirmed policy without overwriting or demoting it.
     """
-    # 1. Login as customer Shivu
-    sqlite_db.provision_demo_accounts(force_reconcile=True)
-    login_resp = client.post("/api/auth/login", json={"email": "shivu@gmail.com", "password": "12345678"})
-    assert login_resp.status_code == 200
-    token = login_resp.json()["token"]
+    # 1. Dedicated test customer to isolate test runs and prevent polluting shared demo accounts
+    import uuid
+    test_email = f"test_explore_{uuid.uuid4().hex[:8]}@example.com"
+    signup_resp = client.post("/api/auth/signup", json={
+        "email": test_email,
+        "password": "Password123!",
+        "role": "customer",
+        "full_name": "Test Customer Explore"
+    })
+    assert signup_resp.status_code == 201
+    token = signup_resp.json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # 2. Complete eligibility assessment with eligible inputs

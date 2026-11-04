@@ -500,6 +500,9 @@ class SQLiteManager:
         expires_at = (now + timedelta(hours=duration_hours)).isoformat()
         with self._get_connection() as conn:
             cur = conn.cursor()
+            # Opportunistic cleanup of expired sessions to keep table compact
+            cur.execute("DELETE FROM sessions WHERE expires_at < ?", (now.isoformat(),))
+
             cur.execute("""
                 INSERT INTO sessions (token, user_id, role, created_at, expires_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -526,11 +529,20 @@ class SQLiteManager:
             data = dict(row)
             # Check expiration
             expires_at = datetime.fromisoformat(data["expires_at"])
-            if datetime.now(timezone.utc) > expires_at:
+            now = datetime.now(timezone.utc)
+            if now > expires_at:
                 # Expired -> delete
                 cur.execute("DELETE FROM sessions WHERE token = ?", (token,))
                 conn.commit()
                 return None
+
+            # Sliding expiration: if session has less than 4 hours remaining, extend by 24h
+            if expires_at - now < timedelta(hours=4):
+                new_expiry = (now + timedelta(hours=24)).isoformat()
+                cur.execute("UPDATE sessions SET expires_at = ? WHERE token = ?", (new_expiry, token))
+                conn.commit()
+                data["expires_at"] = new_expiry
+
             return data
 
     def delete_session(self, token: str) -> bool:
@@ -1394,7 +1406,7 @@ class SQLiteManager:
         now = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("UPDATE plan_selections SET status = 'SWITCHED', updated_at = ? WHERE user_id = ? AND status IN ('ACTIVE', 'CONFIRMED')", (now, user_id))
+            cur.execute("UPDATE plan_selections SET status = 'SWITCHED', updated_at = ? WHERE user_id = ? AND status = 'ACTIVE'", (now, user_id))
             cur.execute("""
                 INSERT INTO plan_selections (
                     selection_id, user_id, assessment_id, selected_plan_id, status, created_at, updated_at

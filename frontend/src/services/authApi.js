@@ -166,15 +166,19 @@ export const authApi = {
         }
       });
       if (!res.ok) {
-        this.clearSession();
-        return null;
+        if (res.status === 401) {
+          this.clearSession();
+          return null;
+        }
+        // Transient server errors (500, 502, 503) should NOT destroy credentials
+        return this.getStoredUser();
       }
       const user = await parseResponse(res);
       this.setStoredUser(user);
       return user;
     } catch {
-      this.clearSession();
-      return null;
+      // Temporary network disconnects or restarts should NOT wipe stored credentials
+      return this.getStoredUser();
     }
   }
 };

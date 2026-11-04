@@ -142,9 +142,11 @@ def assess_applicant_eligibility(
 def get_my_current_assessment(current_user: UserIdentity = Depends(get_auth_user)):
     """
     Retrieves the authenticated user's current active eligibility assessment and active plan selection.
+    Prioritizes confirmed plan selection if one exists to guarantee persistent confirmed policy state.
     """
     assessment = sqlite_db.get_current_assessment_for_user(current_user.user_id)
-    active_selection = sqlite_db.get_active_plan_selection_for_user(current_user.user_id)
+    confirmed_selection = sqlite_db.get_confirmed_plan_selection_for_user(current_user.user_id)
+    active_selection = confirmed_selection or sqlite_db.get_active_plan_selection_for_user(current_user.user_id)
 
     if not assessment:
         return {
@@ -168,6 +170,7 @@ def select_plan_with_eligibility(
     Records an active plan selection.
     Enforces that the user has an active ELIGIBLE assessment covering the selected plan,
     and enforces role-based plan authorization.
+    If the user has already confirmed a plan, preserves that confirmed policy and enables chatbot exploration.
     """
     # 1. Enforce role-based plan authorization
     authorized_plans = AuthorizationService.get_authorized_plans(current_user.role)
@@ -197,8 +200,22 @@ def select_plan_with_eligibility(
             detail=f"Plan '{payload.selected_plan_id}' is not in your qualified plans: {qualifying_plans}"
         )
 
-    # Plan selection starts in ACTIVE unconfirmed mode so the user can verify and confirm manually
+    # If the user already confirmed a plan, preserve the confirmed policy and allow exploration
+    confirmed_sel = sqlite_db.get_confirmed_plan_selection_for_user(current_user.user_id)
+    if confirmed_sel:
+        plan_info = PLAN_REGISTRY.get(payload.selected_plan_id)
+        plan_name = plan_info.plan_name if plan_info else payload.selected_plan_id
+        return {
+            "selection_id": confirmed_sel["selection_id"],
+            "selected_plan_id": payload.selected_plan_id,
+            "plan_name": plan_name,
+            "status": "CONFIRMED",
+            "confirmed_plan_id": confirmed_sel["selected_plan_id"],
+            "mode": "CHATBOT_EXPLORATION" if payload.selected_plan_id != confirmed_sel["selected_plan_id"] else "CONFIRMED",
+            "assessment_id": assessment["assessment_id"]
+        }
 
+    # Plan selection starts in ACTIVE unconfirmed mode so the user can verify and confirm manually
     selection_id = sqlite_db.save_plan_selection(
         user_id=current_user.user_id,
         assessment_id=assessment["assessment_id"],

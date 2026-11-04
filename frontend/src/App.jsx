@@ -67,13 +67,13 @@ export function App() {
                 if (isEligible) {
                   const activeSel = eligData.active_plan_selection;
                   const isConfirmed = Boolean(
-                    activeSel?.status === 'CONFIRMED' &&
-                    activeSel?.confirmed_at
+                    (activeSel?.status === 'CONFIRMED' && activeSel?.confirmed_at) ||
+                    (user?.is_confirmed && user?.confirmed_plan_id)
                   );
 
-                  const confPId = activeSel?.status === 'CONFIRMED'
+                  const confPId = (activeSel?.status === 'CONFIRMED' && activeSel?.selected_plan_id)
                     ? activeSel.selected_plan_id
-                    : (user.confirmed_plan_id || (user.is_confirmed ? activeSel?.selected_plan_id : null));
+                    : (user?.confirmed_plan_id || (user?.is_confirmed ? activeSel?.selected_plan_id : null));
 
                   if (isConfirmed && confPId) {
                     setConfirmedPlanId(confPId);
@@ -229,6 +229,11 @@ export function App() {
       sessionStorage.setItem('ins_app_admin_tab', 'dashboard');
     } else {
       try {
+        const fullUser = await authApi.getCurrentUser().catch(() => user);
+        if (fullUser) {
+          user = { ...user, ...fullUser };
+          setCurrentUser(user);
+        }
         const eligData = await eligibilityApi.getMyAssessment();
         if (eligData && eligData.has_assessment && eligData.assessment) {
           setUserAssessment(eligData.assessment);
@@ -236,13 +241,13 @@ export function App() {
           if (isEligible) {
             const activeSel = eligData.active_plan_selection;
             const isConfirmed = Boolean(
-              activeSel?.status === 'CONFIRMED' &&
-              activeSel?.confirmed_at
+              (activeSel?.status === 'CONFIRMED' && activeSel?.confirmed_at) ||
+              (user?.is_confirmed && user?.confirmed_plan_id)
             );
 
-            const confPId = activeSel?.status === 'CONFIRMED'
+            const confPId = (activeSel?.status === 'CONFIRMED' && activeSel?.selected_plan_id)
               ? activeSel.selected_plan_id
-              : (user.confirmed_plan_id || (user.is_confirmed ? activeSel?.selected_plan_id : null));
+              : (user?.confirmed_plan_id || (user?.is_confirmed ? activeSel?.selected_plan_id : null));
 
             if (isConfirmed && confPId) {
               setConfirmedPlanId(confPId);
@@ -721,7 +726,7 @@ export function App() {
                       assessment={userAssessment}
                       onConfirmationSuccess={(confData, proceedToChat = false) => {
                         const confDate = confData.confirmedAt || new Date().toISOString();
-                        const pId = confData.selectionId || selectedPlan?.plan_id;
+                        const pId = confData.plan_id || confData.planId || selectedPlan?.plan_id;
                         setConfirmedPlanId(pId);
                         setCurrentUser((prev) => ({
                           ...prev,
